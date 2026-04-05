@@ -1,20 +1,47 @@
 import nodemailer from 'nodemailer';
 
-// Create Gmail SMTP transporter
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
+// Gmail SMTP configuration
+const GMAIL_USER = process.env.GMAIL_USER;
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
 
-export async function sendVerificationEmail(to: string, username: string, code: string) {
+// Create transporter only if credentials are available
+let transporter: nodemailer.Transporter | null = null;
+
+if (GMAIL_USER && GMAIL_APP_PASSWORD) {
+  transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: {
+      user: GMAIL_USER,
+      pass: GMAIL_APP_PASSWORD,
+    },
+  });
+} else {
+  console.error('[Email] Missing environment variables: GMAIL_USER or GMAIL_APP_PASSWORD');
+}
+
+export async function sendVerificationEmail(to: string, username: string, code: string): Promise<{ success: boolean; error?: string }> {
+  console.log(`[Email] Attempting to send verification email to: ${to}`);
+  
+  // Check if transporter is configured
+  if (!transporter) {
+    console.error('[Email] Transporter not configured - check environment variables');
+    return { success: false, error: 'Email service not configured. Missing GMAIL_USER or GMAIL_APP_PASSWORD.' };
+  }
+
+  // Verify transporter connection
   try {
-    await transporter.sendMail({
-      from: `"Luma Security" <${process.env.GMAIL_USER}>`,
+    await transporter.verify();
+    console.log('[Email] Transporter verified successfully');
+  } catch (verifyError) {
+    console.error('[Email] Transporter verification failed:', verifyError);
+    return { success: false, error: 'Email service authentication failed. Check Gmail credentials.' };
+  }
+
+  try {
+    const info = await transporter.sendMail({
+      from: `"Luma Security" <${GMAIL_USER}>`,
       to,
       subject: 'Verify your Luma account',
       html: `
@@ -71,9 +98,13 @@ export async function sendVerificationEmail(to: string, username: string, code: 
       text: `Welcome to Luma!\n\nHi ${username},\n\nYour verification code is: ${code}\n\nThis code expires in 24 hours.\n\nIf you didn't create an account, ignore this email.`,
     });
     
+    console.log(`[Email] Email sent successfully: ${info.messageId}`);
     return { success: true };
   } catch (error) {
-    console.error('Failed to send email:', error);
-    return { success: false, error: 'Failed to send verification email' };
+    console.error('[Email] Failed to send email:', error);
+    if (error instanceof Error) {
+      console.error('[Email] Error details:', error.message);
+    }
+    return { success: false, error: `Failed to send email: ${error instanceof Error ? error.message : 'Unknown error'}` };
   }
 }
