@@ -1,4 +1,4 @@
-import { sql } from '@vercel/postgres';
+import { createServerClient } from './supabase-client';
 import { ScanReport } from '@/types';
 
 export interface CommunitySubmission {
@@ -27,10 +27,12 @@ export interface CommunitySubmission {
 const ADMIN_TOKEN = 'pvKcCHCd6Vf78E8XrbsUrovHvosf1RlX';
 
 /**
- * Community Submissions Store with Vercel Postgres
+ * Community Submissions Store with Supabase
  * Persistent across deployments with per-user voting
  */
 class CommunitySubmissionsStore {
+  private supabase = createServerClient();
+
   async submit(
     report: ScanReport, 
     submittedBy: string = 'Anonymous',
@@ -45,10 +47,21 @@ class CommunitySubmissionsStore {
 
       const submissionId = `sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-      await sql`
-        INSERT INTO community_submissions (id, scan_id, submitted_by, user_id, status, report, upvotes, downvotes, details)
-        VALUES (${submissionId}, ${report.id}, ${submittedBy}, ${userId || null}, 'pending', ${JSON.stringify(report)}, 0, 0, ${details ? JSON.stringify(details) : null})
-      `;
+      const { error } = await this.supabase
+        .from('community_submissions')
+        .insert({
+          id: submissionId,
+          scan_id: report.id,
+          submitted_by: submittedBy,
+          user_id: userId || null,
+          status: 'pending',
+          report: report,
+          upvotes: 0,
+          downvotes: 0,
+          details: details || null,
+        });
+
+      if (error) throw error;
 
       const submission: CommunitySubmission = {
         id: submissionId,
@@ -76,15 +89,19 @@ class CommunitySubmissionsStore {
         return { success: false, error: 'Invalid admin token' };
       }
 
-      // Delete votes first (foreign key constraint)
-      await sql`DELETE FROM user_votes WHERE submission_id = ${submissionId}`;
-      
+      // Delete votes first
+      await this.supabase
+        .from('user_votes')
+        .delete()
+        .eq('submission_id', submissionId);
+
       // Delete submission
-      const result = await sql`DELETE FROM community_submissions WHERE id = ${submissionId}`;
-      
-      if (result.rowCount === 0) {
-        return { success: false, error: 'Submission not found' };
-      }
+      const { error } = await this.supabase
+        .from('community_submissions')
+        .delete()
+        .eq('id', submissionId);
+
+      if (error) throw error;
 
       return { success: true };
     } catch (error) {
@@ -95,31 +112,34 @@ class CommunitySubmissionsStore {
 
   async getSubmissions(status?: 'pending' | 'verified' | 'rejected'): Promise<CommunitySubmission[]> {
     try {
-      let result;
+      let query = this.supabase
+        .from('community_submissions')
+        .select('*')
+        .order('submitted_at', { ascending: false });
+
       if (status) {
-        result = await sql`
-          SELECT * FROM community_submissions WHERE status = ${status} ORDER BY submitted_at DESC
-        `;
-      } else {
-        result = await sql`
-          SELECT * FROM community_submissions ORDER BY submitted_at DESC
-        `;
+        query = query.eq('status', status);
       }
 
-      const submissions: CommunitySubmission[] = [];
-      
-      for (const row of result.rows) {
+      const { data: submissions, error } = await query;
+
+      if (error || !submissions) return [];
+
+      const result: CommunitySubmission[] = [];
+
+      for (const row of submissions) {
         // Get user votes for this submission
-        const votesResult = await sql`
-          SELECT user_id, vote_type FROM user_votes WHERE submission_id = ${row.id}
-        `;
-        
+        const { data: votes } = await this.supabase
+          .from('user_votes')
+          .select('user_id, vote_type')
+          .eq('submission_id', row.id);
+
         const userVotes: Record<string, 'up' | 'down'> = {};
-        votesResult.rows.forEach((vote: { user_id: string; vote_type: 'up' | 'down' }) => {
+        votes?.forEach((vote: any) => {
           userVotes[vote.user_id] = vote.vote_type;
         });
 
-        submissions.push({
+        result.push({
           id: row.id,
           scanId: row.scan_id,
           submittedBy: row.submitted_by,
@@ -133,7 +153,7 @@ class CommunitySubmissionsStore {
         });
       }
 
-      return submissions;
+      return result;
     } catch (error) {
       console.error('[CommunityStore] Get submissions error:', error);
       return [];
@@ -142,19 +162,22 @@ class CommunitySubmissionsStore {
 
   async getSubmissionById(submissionId: string): Promise<CommunitySubmission | null> {
     try {
-      const result = await sql`SELECT * FROM community_submissions WHERE id = ${submissionId}`;
-      
-      if (result.rowCount === 0) return null;
+      const { data: row, error } = await this.supabase
+        .from('community_submissions')
+        .select('*')
+        .eq('id', submissionId)
+        .single();
 
-      const row = result.rows[0];
-      
+      if (error || !row) return null;
+
       // Get user votes for this submission
-      const votesResult = await sql`
-        SELECT user_id, vote_type FROM user_votes WHERE submission_id = ${row.id}
-      `;
-      
+      const { data: votes } = await this.supabase
+        .from('user_votes')
+        .select('user_id, vote_type')
+        .eq('submission_id', row.id);
+
       const userVotes: Record<string, 'up' | 'down'> = {};
-      votesResult.rows.forEach((vote: { user_id: string; vote_type: 'up' | 'down' }) => {
+      votes?.forEach((vote: any) => {
         userVotes[vote.user_id] = vote.vote_type;
       });
 
@@ -179,51 +202,69 @@ class CommunitySubmissionsStore {
   async vote(submissionId: string, userId: string, vote: 'up' | 'down'): Promise<{ success: boolean; submission?: CommunitySubmission; error?: string }> {
     try {
       // Check if user already voted
-      const existingVote = await sql`
-        SELECT vote_type FROM user_votes WHERE user_id = ${userId} AND submission_id = ${submissionId}
-      `;
+      const { data: existingVote } = await this.supabase
+        .from('user_votes')
+        .select('vote_type')
+        .eq('user_id', userId)
+        .eq('submission_id', submissionId)
+        .single();
 
-      const previousVote = existingVote.rowCount > 0 ? existingVote.rows[0].vote_type : null;
+      const previousVote = existingVote?.vote_type;
 
       if (previousVote === vote) {
         // User is toggling off their vote - remove it
-        await sql`DELETE FROM user_votes WHERE user_id = ${userId} AND submission_id = ${submissionId}`;
-        
+        await this.supabase
+          .from('user_votes')
+          .delete()
+          .eq('user_id', userId)
+          .eq('submission_id', submissionId);
+
         // Decrement vote count
         if (vote === 'up') {
-          await sql`UPDATE community_submissions SET upvotes = upvotes - 1 WHERE id = ${submissionId}`;
+          await this.supabase.rpc('decrement_upvotes', { submission_id: submissionId });
         } else {
-          await sql`UPDATE community_submissions SET downvotes = downvotes - 1 WHERE id = ${submissionId}`;
+          await this.supabase.rpc('decrement_downvotes', { submission_id: submissionId });
         }
       } else {
         // Remove previous vote if exists
         if (previousVote) {
-          await sql`DELETE FROM user_votes WHERE user_id = ${userId} AND submission_id = ${submissionId}`;
+          await this.supabase
+            .from('user_votes')
+            .delete()
+            .eq('user_id', userId)
+            .eq('submission_id', submissionId);
+
           if (previousVote === 'up') {
-            await sql`UPDATE community_submissions SET upvotes = upvotes - 1 WHERE id = ${submissionId}`;
+            await this.supabase.rpc('decrement_upvotes', { submission_id: submissionId });
           } else {
-            await sql`UPDATE community_submissions SET downvotes = downvotes - 1 WHERE id = ${submissionId}`;
+            await this.supabase.rpc('decrement_downvotes', { submission_id: submissionId });
           }
         }
 
         // Add new vote
-        await sql`
-          INSERT INTO user_votes (user_id, submission_id, vote_type)
-          VALUES (${userId}, ${submissionId}, ${vote})
-        `;
+        await this.supabase
+          .from('user_votes')
+          .insert({
+            user_id: userId,
+            submission_id: submissionId,
+            vote_type: vote,
+          });
 
         // Increment vote count
         if (vote === 'up') {
-          await sql`UPDATE community_submissions SET upvotes = upvotes + 1 WHERE id = ${submissionId}`;
+          await this.supabase.rpc('increment_upvotes', { submission_id: submissionId });
         } else {
-          await sql`UPDATE community_submissions SET downvotes = downvotes + 1 WHERE id = ${submissionId}`;
+          await this.supabase.rpc('decrement_downvotes', { submission_id: submissionId });
         }
       }
 
       // Check if should auto-verify
       const submission = await this.getSubmissionById(submissionId);
       if (submission && submission.votes.upvotes >= 5 && submission.status === 'pending') {
-        await sql`UPDATE community_submissions SET status = 'verified' WHERE id = ${submissionId}`;
+        await this.supabase
+          .from('community_submissions')
+          .update({ status: 'verified' })
+          .eq('id', submissionId);
         submission.status = 'verified';
       }
 
@@ -236,12 +277,15 @@ class CommunitySubmissionsStore {
 
   async hasUserVoted(submissionId: string, userId: string): Promise<'up' | 'down' | null> {
     try {
-      const result = await sql`
-        SELECT vote_type FROM user_votes WHERE user_id = ${userId} AND submission_id = ${submissionId}
-      `;
-      
-      if (result.rowCount === 0) return null;
-      return result.rows[0].vote_type;
+      const { data: vote, error } = await this.supabase
+        .from('user_votes')
+        .select('vote_type')
+        .eq('user_id', userId)
+        .eq('submission_id', submissionId)
+        .single();
+
+      if (error || !vote) return null;
+      return vote.vote_type;
     } catch (error) {
       return null;
     }
@@ -253,13 +297,12 @@ class CommunitySubmissionsStore {
         return { success: false, error: 'Invalid admin token' };
       }
 
-      const result = await sql`
-        UPDATE community_submissions SET status = ${status} WHERE id = ${submissionId} RETURNING *
-      `;
-      
-      if (result.rowCount === 0) {
-        return { success: false, error: 'Submission not found' };
-      }
+      const { error } = await this.supabase
+        .from('community_submissions')
+        .update({ status })
+        .eq('id', submissionId);
+
+      if (error) throw error;
 
       const submission = await this.getSubmissionById(submissionId);
       return { success: true, submission };
@@ -271,10 +314,13 @@ class CommunitySubmissionsStore {
 
   async getVerifiedHashes(): Promise<string[]> {
     try {
-      const result = await sql`
-        SELECT report->>'hash' as hash FROM community_submissions WHERE status = 'verified'
-      `;
-      return result.rows.map((row: { hash: string }) => row.hash);
+      const { data: submissions, error } = await this.supabase
+        .from('community_submissions')
+        .select('report->hash')
+        .eq('status', 'verified');
+
+      if (error || !submissions) return [];
+      return submissions.map((row: any) => row.report.hash);
     } catch (error) {
       return [];
     }
@@ -288,31 +334,49 @@ class CommunitySubmissionsStore {
     topContributors: Array<{ name: string; submissions: number; userId?: string }>;
   }> {
     try {
-      const totalResult = await sql`SELECT COUNT(*) as count FROM community_submissions`;
-      const pendingResult = await sql`SELECT COUNT(*) as count FROM community_submissions WHERE status = 'pending'`;
-      const verifiedResult = await sql`SELECT COUNT(*) as count FROM community_submissions WHERE status = 'verified'`;
-      const rejectedResult = await sql`SELECT COUNT(*) as count FROM community_submissions WHERE status = 'rejected'`;
+      const { count: total } = await this.supabase
+        .from('community_submissions')
+        .select('*', { count: 'exact', head: true });
+
+      const { count: pending } = await this.supabase
+        .from('community_submissions')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      const { count: verified } = await this.supabase
+        .from('community_submissions')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'verified');
+
+      const { count: rejected } = await this.supabase
+        .from('community_submissions')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'rejected');
 
       // Get top contributors
-      const contributorsResult = await sql`
-        SELECT submitted_by, user_id, COUNT(*) as count 
-        FROM community_submissions 
-        GROUP BY submitted_by, user_id 
-        ORDER BY count DESC 
-        LIMIT 10
-      `;
+      const { data: contributors } = await this.supabase
+        .from('community_submissions')
+        .select('submitted_by, user_id');
 
-      const topContributors = contributorsResult.rows.map((row: { submitted_by: string; user_id: string; count: string }) => ({
-        name: row.submitted_by,
-        userId: row.user_id,
-        submissions: parseInt(row.count),
-      }));
+      const contributorCounts: Record<string, { count: number; userId?: string }> = {};
+      contributors?.forEach((row: any) => {
+        const key = row.submitted_by;
+        if (!contributorCounts[key]) {
+          contributorCounts[key] = { count: 0, userId: row.user_id };
+        }
+        contributorCounts[key].count++;
+      });
+
+      const topContributors = Object.entries(contributorCounts)
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 10)
+        .map(([name, data]) => ({ name, submissions: data.count, userId: data.userId }));
 
       return {
-        total: parseInt(totalResult.rows[0].count),
-        pending: parseInt(pendingResult.rows[0].count),
-        verified: parseInt(verifiedResult.rows[0].count),
-        rejected: parseInt(rejectedResult.rows[0].count),
+        total: total || 0,
+        pending: pending || 0,
+        verified: verified || 0,
+        rejected: rejected || 0,
         topContributors,
       };
     } catch (error) {

@@ -1,9 +1,9 @@
 /**
  * User Authentication Store with Email Verification
- * Uses Vercel Postgres for persistent storage across deployments
+ * Uses Supabase for persistent storage across deployments
  */
 
-import { sql } from '@vercel/postgres';
+import { createServerClient } from './supabase-client';
 
 export interface User {
   id: string;
@@ -41,79 +41,9 @@ function generateToken(): string {
 }
 
 class AuthStore {
-  private initialized = false;
-
-  private async init() {
-    if (this.initialized) return;
-    
-    try {
-      // Create users table
-      await sql`
-        CREATE TABLE IF NOT EXISTS users (
-          id TEXT PRIMARY KEY,
-          username TEXT UNIQUE NOT NULL,
-          email TEXT UNIQUE NOT NULL,
-          password_hash TEXT NOT NULL,
-          email_verified BOOLEAN DEFAULT FALSE,
-          verification_code TEXT,
-          verification_expiry TIMESTAMP,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          bio TEXT DEFAULT '',
-          stats JSONB DEFAULT '{"scansPerformed": 0, "scriptsSubmitted": 0, "totalUpvotes": 0}'::jsonb
-        );
-      `;
-
-      // Create sessions table
-      await sql`
-        CREATE TABLE IF NOT EXISTS sessions (
-          token TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          username TEXT NOT NULL,
-          email TEXT NOT NULL,
-          email_verified BOOLEAN DEFAULT FALSE,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-      `;
-
-      // Create votes table for community submissions
-      await sql`
-        CREATE TABLE IF NOT EXISTS user_votes (
-          id SERIAL PRIMARY KEY,
-          user_id TEXT NOT NULL,
-          submission_id TEXT NOT NULL,
-          vote_type TEXT NOT NULL CHECK (vote_type IN ('up', 'down')),
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(user_id, submission_id)
-        );
-      `;
-
-      // Create community submissions table
-      await sql`
-        CREATE TABLE IF NOT EXISTS community_submissions (
-          id TEXT PRIMARY KEY,
-          scan_id TEXT NOT NULL,
-          submitted_by TEXT NOT NULL,
-          user_id TEXT,
-          submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'verified', 'rejected')),
-          report JSONB NOT NULL,
-          upvotes INTEGER DEFAULT 0,
-          downvotes INTEGER DEFAULT 0,
-          details JSONB
-        );
-      `;
-
-      this.initialized = true;
-      console.log('[AuthStore] Database initialized');
-    } catch (error) {
-      console.error('[AuthStore] Failed to initialize:', error);
-      throw error;
-    }
-  }
+  private supabase = createServerClient();
 
   async register(username: string, email: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> {
-    await this.init();
-
     try {
       if (!username || username.length < 3 || username.length > 20) {
         return { success: false, error: 'Username must be 3-20 characters' };
@@ -132,26 +62,52 @@ class AuthStore {
       const lowerEmail = email.toLowerCase();
 
       // Check if username exists
-      const existingUser = await sql`SELECT id FROM users WHERE username = ${lowerUsername}`;
-      if (existingUser.rowCount > 0) {
+      const { data: existingUser } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('username', lowerUsername)
+        .single();
+
+      if (existingUser) {
         return { success: false, error: 'Username already exists' };
       }
 
       // Check if email exists
-      const existingEmail = await sql`SELECT id FROM users WHERE email = ${lowerEmail}`;
-      if (existingEmail.rowCount > 0) {
+      const { data: existingEmail } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('email', lowerEmail)
+        .single();
+
+      if (existingEmail) {
         return { success: false, error: 'Email already registered' };
       }
 
       const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const verificationCode = generateVerificationCode();
       const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      const defaultStats = { scansPerformed: 0, scriptsSubmitted: 0, totalUpvotes: 0, joinedAt: new Date().toISOString() };
+      const defaultStats = { 
+        scansPerformed: 0, 
+        scriptsSubmitted: 0, 
+        totalUpvotes: 0, 
+        joinedAt: new Date().toISOString() 
+      };
 
-      await sql`
-        INSERT INTO users (id, username, email, password_hash, email_verified, verification_code, verification_expiry, bio, stats)
-        VALUES (${userId}, ${lowerUsername}, ${lowerEmail}, ${password}, FALSE, ${verificationCode}, ${verificationExpiry}, '', ${JSON.stringify(defaultStats)})
-      `;
+      const { error } = await this.supabase
+        .from('users')
+        .insert({
+          id: userId,
+          username: lowerUsername,
+          email: lowerEmail,
+          password_hash: password,
+          email_verified: false,
+          verification_code: verificationCode,
+          verification_expiry: verificationExpiry,
+          bio: '',
+          stats: defaultStats,
+        });
+
+      if (error) throw error;
 
       const user: User = {
         id: userId,
@@ -174,20 +130,18 @@ class AuthStore {
   }
 
   async verifyEmail(username: string, code: string): Promise<{ success: boolean; error?: string }> {
-    await this.init();
-
     try {
       const lowerUsername = username.toLowerCase();
       
-      const result = await sql`
-        SELECT * FROM users WHERE username = ${lowerUsername}
-      `;
+      const { data: user, error } = await this.supabase
+        .from('users')
+        .select('*')
+        .eq('username', lowerUsername)
+        .single();
 
-      if (result.rowCount === 0) {
+      if (error || !user) {
         return { success: false, error: 'User not found' };
       }
-
-      const user = result.rows[0];
 
       if (user.email_verified) {
         return { success: false, error: 'Email already verified' };
@@ -201,11 +155,16 @@ class AuthStore {
         return { success: false, error: 'Verification code expired' };
       }
 
-      await sql`
-        UPDATE users 
-        SET email_verified = TRUE, verification_code = NULL, verification_expiry = NULL
-        WHERE username = ${lowerUsername}
-      `;
+      const { error: updateError } = await this.supabase
+        .from('users')
+        .update({
+          email_verified: true,
+          verification_code: null,
+          verification_expiry: null,
+        })
+        .eq('username', lowerUsername);
+
+      if (updateError) throw updateError;
 
       return { success: true };
     } catch (error) {
@@ -215,20 +174,18 @@ class AuthStore {
   }
 
   async resendVerification(username: string): Promise<{ success: boolean; code?: string; error?: string }> {
-    await this.init();
-
     try {
       const lowerUsername = username.toLowerCase();
       
-      const result = await sql`
-        SELECT * FROM users WHERE username = ${lowerUsername}
-      `;
+      const { data: user, error } = await this.supabase
+        .from('users')
+        .select('*')
+        .eq('username', lowerUsername)
+        .single();
 
-      if (result.rowCount === 0) {
+      if (error || !user) {
         return { success: false, error: 'User not found' };
       }
-
-      const user = result.rows[0];
 
       if (user.email_verified) {
         return { success: false, error: 'Email already verified' };
@@ -237,11 +194,15 @@ class AuthStore {
       const newCode = generateVerificationCode();
       const newExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-      await sql`
-        UPDATE users 
-        SET verification_code = ${newCode}, verification_expiry = ${newExpiry}
-        WHERE username = ${lowerUsername}
-      `;
+      const { error: updateError } = await this.supabase
+        .from('users')
+        .update({
+          verification_code: newCode,
+          verification_expiry: newExpiry,
+        })
+        .eq('username', lowerUsername);
+
+      if (updateError) throw updateError;
 
       return { success: true, code: newCode };
     } catch (error) {
@@ -251,20 +212,18 @@ class AuthStore {
   }
 
   async login(username: string, password: string): Promise<{ success: boolean; session?: Session; error?: string; needsVerification?: boolean }> {
-    await this.init();
-
     try {
       const lowerUsername = username.toLowerCase();
       
-      const result = await sql`
-        SELECT * FROM users WHERE username = ${lowerUsername}
-      `;
+      const { data: user, error } = await this.supabase
+        .from('users')
+        .select('*')
+        .eq('username', lowerUsername)
+        .single();
 
-      if (result.rowCount === 0) {
+      if (error || !user) {
         return { success: false, error: 'Invalid username or password' };
       }
-
-      const user = result.rows[0];
 
       if (user.password_hash !== password) {
         return { success: false, error: 'Invalid username or password' };
@@ -276,10 +235,17 @@ class AuthStore {
 
       const token = generateToken();
 
-      await sql`
-        INSERT INTO sessions (token, user_id, username, email, email_verified)
-        VALUES (${token}, ${user.id}, ${user.username}, ${user.email}, ${user.email_verified})
-      `;
+      const { error: insertError } = await this.supabase
+        .from('sessions')
+        .insert({
+          token,
+          user_id: user.id,
+          username: user.username,
+          email: user.email,
+          email_verified: user.email_verified,
+        });
+
+      if (insertError) throw insertError;
 
       const session: Session = {
         userId: user.id,
@@ -298,18 +264,16 @@ class AuthStore {
   }
 
   async validateToken(token: string): Promise<Session | null> {
-    await this.init();
-
     try {
-      const result = await sql`
-        SELECT * FROM sessions WHERE token = ${token}
-      `;
+      const { data: session, error } = await this.supabase
+        .from('sessions')
+        .select('*')
+        .eq('token', token)
+        .single();
 
-      if (result.rowCount === 0) {
+      if (error || !session) {
         return null;
       }
-
-      const session = result.rows[0];
 
       return {
         userId: session.user_id,
@@ -326,10 +290,13 @@ class AuthStore {
   }
 
   async logout(token: string): Promise<boolean> {
-    await this.init();
-
     try {
-      await sql`DELETE FROM sessions WHERE token = ${token}`;
+      const { error } = await this.supabase
+        .from('sessions')
+        .delete()
+        .eq('token', token);
+
+      if (error) throw error;
       return true;
     } catch (error) {
       console.error('[AuthStore] Logout error:', error);
@@ -338,14 +305,15 @@ class AuthStore {
   }
 
   async getUserById(userId: string): Promise<User | undefined> {
-    await this.init();
-
     try {
-      const result = await sql`SELECT * FROM users WHERE id = ${userId}`;
-      
-      if (result.rowCount === 0) return undefined;
+      const { data: user, error } = await this.supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-      const user = result.rows[0];
+      if (error || !user) return undefined;
+
       return {
         id: user.id,
         username: user.username,
@@ -365,15 +333,16 @@ class AuthStore {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    await this.init();
-
     try {
       const lowerUsername = username.toLowerCase();
-      const result = await sql`SELECT * FROM users WHERE username = ${lowerUsername}`;
-      
-      if (result.rowCount === 0) return undefined;
+      const { data: user, error } = await this.supabase
+        .from('users')
+        .select('*')
+        .eq('username', lowerUsername)
+        .single();
 
-      const user = result.rows[0];
+      if (error || !user) return undefined;
+
       return {
         id: user.id,
         username: user.username,
@@ -393,22 +362,17 @@ class AuthStore {
   }
 
   async updateUser(userId: string, updates: Partial<User>): Promise<{ success: boolean; error?: string }> {
-    await this.init();
-
     try {
-      const user = await this.getUserById(userId);
-      if (!user) {
-        return { success: false, error: 'User not found' };
-      }
+      const updateData: any = {};
+      if (updates.bio !== undefined) updateData.bio = updates.bio;
+      if (updates.stats !== undefined) updateData.stats = updates.stats;
 
-      if (updates.bio !== undefined) {
-        await sql`UPDATE users SET bio = ${updates.bio} WHERE id = ${userId}`;
-      }
+      const { error } = await this.supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', userId);
 
-      if (updates.stats !== undefined) {
-        await sql`UPDATE users SET stats = ${JSON.stringify(updates.stats)} WHERE id = ${userId}`;
-      }
-
+      if (error) throw error;
       return { success: true };
     } catch (error) {
       console.error('[AuthStore] Update user error:', error);
@@ -417,13 +381,11 @@ class AuthStore {
   }
 
   async incrementUserStat(userId: string, stat: 'scansPerformed' | 'scriptsSubmitted' | 'totalUpvotes'): Promise<void> {
-    await this.init();
-
     try {
       const user = await this.getUserById(userId);
       if (user && user.stats) {
         user.stats[stat]++;
-        await sql`UPDATE users SET stats = ${JSON.stringify(user.stats)} WHERE id = ${userId}`;
+        await this.updateUser(userId, { stats: user.stats });
       }
     } catch (error) {
       console.error('[AuthStore] Increment stat error:', error);
@@ -431,11 +393,14 @@ class AuthStore {
   }
 
   async getAllUsers(): Promise<User[]> {
-    await this.init();
-
     try {
-      const result = await sql`SELECT * FROM users`;
-      return result.rows.map(user => ({
+      const { data: users, error } = await this.supabase
+        .from('users')
+        .select('*');
+
+      if (error || !users) return [];
+
+      return users.map((user: any) => ({
         id: user.id,
         username: user.username,
         email: user.email,
