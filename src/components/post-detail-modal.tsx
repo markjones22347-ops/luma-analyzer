@@ -264,7 +264,7 @@ export function PostDetailModal({ submission, isOpen, onClose, currentUserId, us
             <div style={styles.headerTitle}>
               <FileCode style={{ width: '24px', height: '24px', color: '#3b82f6' }} />
               <h2 style={styles.title}>
-                {submission.details?.scriptName || report.fileMetadata.fileName || 'Untitled Script'}
+                {submission.details?.scriptName || report.fileMetadata.filename || 'Untitled Script'}
               </h2>
             </div>
             <button onClick={onClose} style={styles.closeButton}>
@@ -344,11 +344,11 @@ export function PostDetailModal({ submission, isOpen, onClose, currentUserId, us
                 <div>
                   <div style={styles.descriptionLabel}>Detections ({report.detections.length})</div>
                   <div style={styles.detectionList}>
-                    {report.detections.slice(0, 5).map((detection, i) => (
-                      <div key={i} style={styles.detectionItem(detection.severity)}>
-                        <span style={styles.detectionText}>{detection.description}</span>
-                        <span style={styles.detectionSeverity(detection.severity)}>
-                          {detection.severity}
+                    {report.detections.slice(0, 5).map((category, i) => (
+                      <div key={i} style={styles.detectionItem(category.severity)}>
+                        <span style={styles.detectionText}>{category.name}: {category.detections.map(d => d.description).join(', ')}</span>
+                        <span style={styles.detectionSeverity(category.severity)}>
+                          {category.severity}
                         </span>
                       </div>
                     ))}
