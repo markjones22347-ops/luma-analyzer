@@ -179,21 +179,6 @@ export async function PUT(request: Request) {
     const result = await communitySubmissions.vote(submissionId, session.userId, vote);
 
     if (result.success) {
-      // Update user's total upvotes stat if they upvoted
-      if (vote === 'up' && result.submission) {
-        // Count total upvotes this user has received
-        const submissions = await communitySubmissions.getSubmissions();
-        const userSubmissions = submissions.filter(s => s.userId === session.userId);
-        const totalUpvotes = userSubmissions.reduce((sum, s) => sum + s.votes.upvotes, 0);
-        
-        // Update the stat (we'll just set it directly since we calculated it)
-        const user = await authStore.getUserById(session.userId);
-        if (user && user.stats) {
-          user.stats.totalUpvotes = totalUpvotes;
-          await authStore.updateUser(session.userId, { stats: user.stats });
-        }
-      }
-      
       return NextResponse.json({
         success: true,
         submission: result.submission,

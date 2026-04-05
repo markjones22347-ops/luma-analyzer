@@ -1,4 +1,4 @@
-import { kv } from '@vercel/kv';
+import { sql } from '@vercel/postgres';
 import { ScanReport } from '@/types';
 
 export interface CommunitySubmission {
@@ -25,11 +25,9 @@ export interface CommunitySubmission {
 }
 
 const ADMIN_TOKEN = 'pvKcCHCd6Vf78E8XrbsUrovHvosf1RlX';
-const SUBMISSIONS_KEY = 'community_submissions';
-const MAX_SUBMISSIONS = 1000;
 
 /**
- * Community Submissions Store with Vercel KV
+ * Community Submissions Store with Vercel Postgres
  * Persistent across deployments with per-user voting
  */
 class CommunitySubmissionsStore {
@@ -45,34 +43,26 @@ class CommunitySubmissionsStore {
         return { success: false, error: 'Only scripts with MODERATE risk or higher can be submitted' };
       }
 
+      const submissionId = `sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      await sql`
+        INSERT INTO community_submissions (id, scan_id, submitted_by, user_id, status, report, upvotes, downvotes, details)
+        VALUES (${submissionId}, ${report.id}, ${submittedBy}, ${userId || null}, 'pending', ${JSON.stringify(report)}, 0, 0, ${details ? JSON.stringify(details) : null})
+      `;
+
       const submission: CommunitySubmission = {
-        id: `sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: submissionId,
         scanId: report.id,
         submittedBy,
         userId,
         submittedAt: new Date().toISOString(),
         status: 'pending',
         report,
-        votes: {
-          upvotes: 0,
-          downvotes: 0,
-        },
+        votes: { upvotes: 0, downvotes: 0 },
         userVotes: {},
         details,
       };
 
-      // Get existing submissions
-      const submissions = await kv.get<CommunitySubmission[]>(SUBMISSIONS_KEY) || [];
-      
-      // Add new submission
-      submissions.push(submission);
-      
-      // Keep only last MAX_SUBMISSIONS
-      if (submissions.length > MAX_SUBMISSIONS) {
-        submissions.shift();
-      }
-
-      await kv.set(SUBMISSIONS_KEY, submissions);
       return { success: true, submission };
     } catch (error) {
       console.error('[CommunityStore] Submit error:', error);
@@ -86,15 +76,16 @@ class CommunitySubmissionsStore {
         return { success: false, error: 'Invalid admin token' };
       }
 
-      const submissions = await kv.get<CommunitySubmission[]>(SUBMISSIONS_KEY) || [];
-      const index = submissions.findIndex(s => s.id === submissionId);
+      // Delete votes first (foreign key constraint)
+      await sql`DELETE FROM user_votes WHERE submission_id = ${submissionId}`;
       
-      if (index === -1) {
+      // Delete submission
+      const result = await sql`DELETE FROM community_submissions WHERE id = ${submissionId}`;
+      
+      if (result.rowCount === 0) {
         return { success: false, error: 'Submission not found' };
       }
 
-      submissions.splice(index, 1);
-      await kv.set(SUBMISSIONS_KEY, submissions);
       return { success: true };
     } catch (error) {
       console.error('[CommunityStore] Delete error:', error);
@@ -104,12 +95,45 @@ class CommunitySubmissionsStore {
 
   async getSubmissions(status?: 'pending' | 'verified' | 'rejected'): Promise<CommunitySubmission[]> {
     try {
-      const submissions = await kv.get<CommunitySubmission[]>(SUBMISSIONS_KEY) || [];
-      
+      let result;
       if (status) {
-        return submissions.filter(s => s.status === status).reverse();
+        result = await sql`
+          SELECT * FROM community_submissions WHERE status = ${status} ORDER BY submitted_at DESC
+        `;
+      } else {
+        result = await sql`
+          SELECT * FROM community_submissions ORDER BY submitted_at DESC
+        `;
       }
-      return [...submissions].reverse();
+
+      const submissions: CommunitySubmission[] = [];
+      
+      for (const row of result.rows) {
+        // Get user votes for this submission
+        const votesResult = await sql`
+          SELECT user_id, vote_type FROM user_votes WHERE submission_id = ${row.id}
+        `;
+        
+        const userVotes: Record<string, 'up' | 'down'> = {};
+        votesResult.rows.forEach((vote: { user_id: string; vote_type: 'up' | 'down' }) => {
+          userVotes[vote.user_id] = vote.vote_type;
+        });
+
+        submissions.push({
+          id: row.id,
+          scanId: row.scan_id,
+          submittedBy: row.submitted_by,
+          userId: row.user_id,
+          submittedAt: row.submitted_at,
+          status: row.status,
+          report: row.report,
+          votes: { upvotes: row.upvotes, downvotes: row.downvotes },
+          userVotes,
+          details: row.details,
+        });
+      }
+
+      return submissions;
     } catch (error) {
       console.error('[CommunityStore] Get submissions error:', error);
       return [];
@@ -118,8 +142,34 @@ class CommunitySubmissionsStore {
 
   async getSubmissionById(submissionId: string): Promise<CommunitySubmission | null> {
     try {
-      const submissions = await kv.get<CommunitySubmission[]>(SUBMISSIONS_KEY) || [];
-      return submissions.find(s => s.id === submissionId) || null;
+      const result = await sql`SELECT * FROM community_submissions WHERE id = ${submissionId}`;
+      
+      if (result.rowCount === 0) return null;
+
+      const row = result.rows[0];
+      
+      // Get user votes for this submission
+      const votesResult = await sql`
+        SELECT user_id, vote_type FROM user_votes WHERE submission_id = ${row.id}
+      `;
+      
+      const userVotes: Record<string, 'up' | 'down'> = {};
+      votesResult.rows.forEach((vote: { user_id: string; vote_type: 'up' | 'down' }) => {
+        userVotes[vote.user_id] = vote.vote_type;
+      });
+
+      return {
+        id: row.id,
+        scanId: row.scan_id,
+        submittedBy: row.submitted_by,
+        userId: row.user_id,
+        submittedAt: row.submitted_at,
+        status: row.status,
+        report: row.report,
+        votes: { upvotes: row.upvotes, downvotes: row.downvotes },
+        userVotes,
+        details: row.details,
+      };
     } catch (error) {
       console.error('[CommunityStore] Get submission error:', error);
       return null;
@@ -128,51 +178,55 @@ class CommunitySubmissionsStore {
 
   async vote(submissionId: string, userId: string, vote: 'up' | 'down'): Promise<{ success: boolean; submission?: CommunitySubmission; error?: string }> {
     try {
-      const submissions = await kv.get<CommunitySubmission[]>(SUBMISSIONS_KEY) || [];
-      const submission = submissions.find(s => s.id === submissionId);
-      
-      if (!submission) {
-        return { success: false, error: 'Submission not found' };
-      }
+      // Check if user already voted
+      const existingVote = await sql`
+        SELECT vote_type FROM user_votes WHERE user_id = ${userId} AND submission_id = ${submissionId}
+      `;
 
-      // Initialize userVotes if not exists
-      if (!submission.userVotes) {
-        submission.userVotes = {};
-      }
-
-      const previousVote = submission.userVotes[userId];
+      const previousVote = existingVote.rowCount > 0 ? existingVote.rows[0].vote_type : null;
 
       if (previousVote === vote) {
-        // User is toggling off their vote
+        // User is toggling off their vote - remove it
+        await sql`DELETE FROM user_votes WHERE user_id = ${userId} AND submission_id = ${submissionId}`;
+        
+        // Decrement vote count
         if (vote === 'up') {
-          submission.votes.upvotes = Math.max(0, submission.votes.upvotes - 1);
+          await sql`UPDATE community_submissions SET upvotes = upvotes - 1 WHERE id = ${submissionId}`;
         } else {
-          submission.votes.downvotes = Math.max(0, submission.votes.downvotes - 1);
+          await sql`UPDATE community_submissions SET downvotes = downvotes - 1 WHERE id = ${submissionId}`;
         }
-        delete submission.userVotes[userId];
       } else {
-        // User is changing vote or voting for first time
-        if (previousVote === 'up') {
-          submission.votes.upvotes = Math.max(0, submission.votes.upvotes - 1);
-        } else if (previousVote === 'down') {
-          submission.votes.downvotes = Math.max(0, submission.votes.downvotes - 1);
+        // Remove previous vote if exists
+        if (previousVote) {
+          await sql`DELETE FROM user_votes WHERE user_id = ${userId} AND submission_id = ${submissionId}`;
+          if (previousVote === 'up') {
+            await sql`UPDATE community_submissions SET upvotes = upvotes - 1 WHERE id = ${submissionId}`;
+          } else {
+            await sql`UPDATE community_submissions SET downvotes = downvotes - 1 WHERE id = ${submissionId}`;
+          }
         }
 
         // Add new vote
+        await sql`
+          INSERT INTO user_votes (user_id, submission_id, vote_type)
+          VALUES (${userId}, ${submissionId}, ${vote})
+        `;
+
+        // Increment vote count
         if (vote === 'up') {
-          submission.votes.upvotes++;
+          await sql`UPDATE community_submissions SET upvotes = upvotes + 1 WHERE id = ${submissionId}`;
         } else {
-          submission.votes.downvotes++;
+          await sql`UPDATE community_submissions SET downvotes = downvotes + 1 WHERE id = ${submissionId}`;
         }
-        submission.userVotes[userId] = vote;
       }
 
-      // Auto-verify if enough upvotes
-      if (submission.votes.upvotes >= 5 && submission.status === 'pending') {
+      // Check if should auto-verify
+      const submission = await this.getSubmissionById(submissionId);
+      if (submission && submission.votes.upvotes >= 5 && submission.status === 'pending') {
+        await sql`UPDATE community_submissions SET status = 'verified' WHERE id = ${submissionId}`;
         submission.status = 'verified';
       }
 
-      await kv.set(SUBMISSIONS_KEY, submissions);
       return { success: true, submission };
     } catch (error) {
       console.error('[CommunityStore] Vote error:', error);
@@ -182,9 +236,12 @@ class CommunitySubmissionsStore {
 
   async hasUserVoted(submissionId: string, userId: string): Promise<'up' | 'down' | null> {
     try {
-      const submission = await this.getSubmissionById(submissionId);
-      if (!submission || !submission.userVotes) return null;
-      return submission.userVotes[userId] || null;
+      const result = await sql`
+        SELECT vote_type FROM user_votes WHERE user_id = ${userId} AND submission_id = ${submissionId}
+      `;
+      
+      if (result.rowCount === 0) return null;
+      return result.rows[0].vote_type;
     } catch (error) {
       return null;
     }
@@ -196,19 +253,15 @@ class CommunitySubmissionsStore {
         return { success: false, error: 'Invalid admin token' };
       }
 
-      const submissions = await kv.get<CommunitySubmission[]>(SUBMISSIONS_KEY) || [];
-      const submission = submissions.find(s => s.id === submissionId);
+      const result = await sql`
+        UPDATE community_submissions SET status = ${status} WHERE id = ${submissionId} RETURNING *
+      `;
       
-      if (!submission) {
+      if (result.rowCount === 0) {
         return { success: false, error: 'Submission not found' };
       }
 
-      submission.status = status;
-      if (notes) {
-        submission.notes = notes;
-      }
-
-      await kv.set(SUBMISSIONS_KEY, submissions);
+      const submission = await this.getSubmissionById(submissionId);
       return { success: true, submission };
     } catch (error) {
       console.error('[CommunityStore] Moderate error:', error);
@@ -218,10 +271,10 @@ class CommunitySubmissionsStore {
 
   async getVerifiedHashes(): Promise<string[]> {
     try {
-      const submissions = await kv.get<CommunitySubmission[]>(SUBMISSIONS_KEY) || [];
-      return submissions
-        .filter(s => s.status === 'verified')
-        .map(s => s.report.fileMetadata.hash);
+      const result = await sql`
+        SELECT report->>'hash' as hash FROM community_submissions WHERE status = 'verified'
+      `;
+      return result.rows.map((row: { hash: string }) => row.hash);
     } catch (error) {
       return [];
     }
@@ -235,43 +288,37 @@ class CommunitySubmissionsStore {
     topContributors: Array<{ name: string; submissions: number; userId?: string }>;
   }> {
     try {
-      const submissions = await kv.get<CommunitySubmission[]>(SUBMISSIONS_KEY) || [];
-      
-      const total = submissions.length;
-      const pending = submissions.filter(s => s.status === 'pending').length;
-      const verified = submissions.filter(s => s.status === 'verified').length;
-      const rejected = submissions.filter(s => s.status === 'rejected').length;
+      const totalResult = await sql`SELECT COUNT(*) as count FROM community_submissions`;
+      const pendingResult = await sql`SELECT COUNT(*) as count FROM community_submissions WHERE status = 'pending'`;
+      const verifiedResult = await sql`SELECT COUNT(*) as count FROM community_submissions WHERE status = 'verified'`;
+      const rejectedResult = await sql`SELECT COUNT(*) as count FROM community_submissions WHERE status = 'rejected'`;
 
-      // Count submissions by contributor with userId
-      const contributorCounts: Record<string, { count: number; userId?: string }> = {};
-      submissions.forEach(s => {
-        const key = s.submittedBy;
-        if (!contributorCounts[key]) {
-          contributorCounts[key] = { count: 0, userId: s.userId };
-        }
-        contributorCounts[key].count++;
-      });
+      // Get top contributors
+      const contributorsResult = await sql`
+        SELECT submitted_by, user_id, COUNT(*) as count 
+        FROM community_submissions 
+        GROUP BY submitted_by, user_id 
+        ORDER BY count DESC 
+        LIMIT 10
+      `;
 
-      const topContributors = Object.entries(contributorCounts)
-        .sort((a, b) => b[1].count - a[1].count)
-        .slice(0, 10)
-        .map(([name, data]) => ({ name, submissions: data.count, userId: data.userId }));
+      const topContributors = contributorsResult.rows.map((row: { submitted_by: string; user_id: string; count: string }) => ({
+        name: row.submitted_by,
+        userId: row.user_id,
+        submissions: parseInt(row.count),
+      }));
 
       return {
-        total,
-        pending,
-        verified,
-        rejected,
+        total: parseInt(totalResult.rows[0].count),
+        pending: parseInt(pendingResult.rows[0].count),
+        verified: parseInt(verifiedResult.rows[0].count),
+        rejected: parseInt(rejectedResult.rows[0].count),
         topContributors,
       };
     } catch (error) {
       console.error('[CommunityStore] Get stats error:', error);
       return { total: 0, pending: 0, verified: 0, rejected: 0, topContributors: [] };
     }
-  }
-
-  async clear(): Promise<void> {
-    await kv.del(SUBMISSIONS_KEY);
   }
 }
 
