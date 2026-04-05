@@ -300,7 +300,7 @@ export function CommunitySubmissions({ currentUser, onOpenProfile }: CommunitySu
   const [stats, setStats] = useState<CommunityStats | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'verified' | 'rejected'>('all');
   const [loading, setLoading] = useState(true);
-  const [userVotes, setUserVotes] = useState<Record<string, 'up' | 'down'>>({});
+  const [userVotes, setUserVotes] = useState<Record<string, 'up' | 'down' | undefined>>({});
   
   // Modals state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -321,7 +321,7 @@ export function CommunitySubmissions({ currentUser, onOpenProfile }: CommunitySu
         setStats(data.stats);
         
         // Track user's votes
-        const votes: Record<string, 'up' | 'down'> = {};
+        const votes: Record<string, 'up' | 'down' | undefined> = {};
         data.submissions.forEach((sub: CommunitySubmission) => {
           if (currentUser && sub.userVotes && sub.userVotes[currentUser.id]) {
             votes[sub.id] = sub.userVotes[currentUser.id];

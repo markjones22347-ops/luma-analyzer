@@ -9,7 +9,7 @@ interface PostDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUserId?: string;
-  userVote: 'up' | 'down' | null;
+  userVote: 'up' | 'down' | null | undefined;
   onVote: (submissionId: string, vote: 'up' | 'down') => void;
 }
 
