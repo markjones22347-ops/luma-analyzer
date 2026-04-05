@@ -9,8 +9,7 @@ interface SubmissionModalProps {
   isOpen: boolean;
   onClose: () => void;
   report: ScanReport;
-  user: { id: string; username: string } | null;
-  token: string | null;
+  user: { id: string; username: string; email: string; emailVerified: boolean } | null;
   onSubmit: (details: { scriptName: string; description: string; source?: string; tags: string[] }) => void;
 }
 
@@ -133,7 +132,7 @@ const styles = {
   },
 };
 
-export function SubmissionModal({ isOpen, onClose, report, user, token, onSubmit }: SubmissionModalProps) {
+export function SubmissionModal({ isOpen, onClose, report, user, onSubmit }: SubmissionModalProps) {
   const [scriptName, setScriptName] = useState(report.fileMetadata.filename || '');
   const [description, setDescription] = useState('');
   const [source, setSource] = useState('');
@@ -169,8 +168,8 @@ export function SubmissionModal({ isOpen, onClose, report, user, token, onSubmit
             source: source.trim() || undefined,
             tags: tagArray,
           },
-          token: token,
         }),
+        credentials: 'include', // Include cookies
       });
 
       const data = await response.json();

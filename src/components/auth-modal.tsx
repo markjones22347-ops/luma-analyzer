@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Lock, LogIn, UserPlus } from 'lucide-react';
+import { X, User, Lock, LogIn, UserPlus, Mail, CheckCircle, RefreshCw } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAuth: (user: { id: string; username: string }, token: string) => void;
+  onAuth: (user: { id: string; username: string; email: string; emailVerified: boolean }) => void;
 }
 
 const styles = {
@@ -110,16 +110,108 @@ const styles = {
     color: '#ef4444',
     fontSize: '13px',
   },
+  success: {
+    padding: '12px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    border: '1px solid rgba(34, 197, 94, 0.2)',
+    color: '#22c55e',
+    fontSize: '13px',
+  },
+  verificationBox: {
+    textAlign: 'center' as const,
+    padding: '20px',
+  },
+  verificationCode: {
+    fontSize: '32px',
+    fontWeight: 700,
+    color: '#3b82f6',
+    letterSpacing: '8px',
+    margin: '20px 0',
+    padding: '20px',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: '8px',
+    border: '1px solid rgba(59, 130, 246, 0.3)',
+  },
+  resendButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '8px 16px',
+    borderRadius: '6px',
+    backgroundColor: 'transparent',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: '13px',
+    cursor: 'pointer',
+    marginTop: '12px',
+  },
 };
 
 export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  
+  // Verification flow state
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [pendingUsername, setPendingUsername] = useState('');
+  const [demoCode, setDemoCode] = useState<string | null>(null); // Remove in production
 
   const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: activeTab,
+          username,
+          email: activeTab === 'register' ? email : undefined,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        if (activeTab === 'register') {
+          // Show verification step
+          setNeedsVerification(true);
+          setPendingUsername(data.user.username);
+          setDemoCode(data.verificationCode); // Remove in production - for demo only
+          setSuccess('Registration successful! Please check your email for verification code.');
+        } else {
+          // Login successful
+          onAuth(data.user);
+          onClose();
+        }
+      } else {
+        if (data.needsVerification) {
+          setNeedsVerification(true);
+          setPendingUsername(data.username);
+          setError('Please verify your email before logging in.');
+        } else {
+          setError(data.error || 'Authentication failed');
+        }
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -129,25 +221,63 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: activeTab,
-          username,
-          password,
+          action: 'verify-email',
+          username: pendingUsername,
+          code: verificationCode,
         }),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        onAuth(data.user, data.token);
+        onAuth(data.user);
         onClose();
       } else {
-        setError(data.error || 'Authentication failed');
+        setError(data.error || 'Verification failed');
       }
     } catch (err) {
       setError('Network error. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleResendCode = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'resend-verification',
+          username: pendingUsername,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setDemoCode(data.verificationCode); // Remove in production
+        setSuccess('New verification code sent!');
+      } else {
+        setError(data.error || 'Failed to resend code');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setNeedsVerification(false);
+    setPendingUsername('');
+    setVerificationCode('');
+    setDemoCode(null);
+    setError(null);
+    setSuccess(null);
   };
 
   if (!isOpen) return null;
@@ -170,78 +300,149 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
         >
           <div style={styles.header}>
             <h2 style={styles.title}>
-              {activeTab === 'login' ? 'Sign In' : 'Create Account'}
+              {needsVerification ? 'Verify Email' : activeTab === 'login' ? 'Sign In' : 'Create Account'}
             </h2>
             <button onClick={onClose} style={styles.closeButton}>
               <X style={{ width: '20px', height: '20px' }} />
             </button>
           </div>
 
-          <div style={styles.tabs}>
-            <button
-              onClick={() => setActiveTab('login')}
-              style={styles.tab(activeTab === 'login')}
-            >
-              <LogIn style={{ width: '16px', height: '16px' }} />
-              Sign In
-            </button>
-            <button
-              onClick={() => setActiveTab('register')}
-              style={styles.tab(activeTab === 'register')}
-            >
-              <UserPlus style={{ width: '16px', height: '16px' }} />
-              Sign Up
-            </button>
-          </div>
+          {needsVerification ? (
+            <div style={styles.verificationBox}>
+              <CheckCircle style={{ width: '48px', height: '48px', color: '#22c55e', marginBottom: '16px' }} />
+              <p style={{ color: 'rgba(255,255,255,0.8)', marginBottom: '20px' }}>
+                Enter the 6-digit code sent to your email
+              </p>
+              
+              {/* DEMO ONLY: Show code (remove in production) */}
+              {demoCode && (
+                <div style={styles.verificationCode}>{demoCode}</div>
+              )}
 
-          {error && <div style={styles.error}>{error}</div>}
+              {error && <div style={styles.error}>{error}</div>}
+              {success && <div style={styles.success}>{success}</div>}
 
-          <form onSubmit={handleSubmit} style={styles.form}>
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Username</label>
-              <div style={{ position: 'relative' }}>
-                <User style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'rgba(255,255,255,0.4)' }} />
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter username"
-                  style={{ ...styles.input, paddingLeft: '40px' }}
-                  required
-                  minLength={3}
-                  maxLength={20}
-                />
-              </div>
+              <form onSubmit={handleVerify} style={styles.form}>
+                <div style={styles.inputGroup}>
+                  <input
+                    type="text"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="000000"
+                    style={{ ...styles.input, textAlign: 'center', fontSize: '24px', letterSpacing: '8px' }}
+                    required
+                    maxLength={6}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading || verificationCode.length !== 6}
+                  style={{
+                    ...styles.submitButton,
+                    opacity: loading || verificationCode.length !== 6 ? 0.6 : 1,
+                    cursor: loading || verificationCode.length !== 6 ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {loading ? 'Verifying...' : 'Verify Email'}
+                </button>
+              </form>
+
+              <button onClick={handleResendCode} disabled={loading} style={styles.resendButton}>
+                <RefreshCw style={{ width: '14px', height: '14px' }} />
+                Resend Code
+              </button>
+
+              <button onClick={resetForm} style={{ ...styles.resendButton, marginTop: '8px' }}>
+                Back to {activeTab === 'login' ? 'Sign In' : 'Sign Up'}
+              </button>
             </div>
-
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Password</label>
-              <div style={{ position: 'relative' }}>
-                <Lock style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'rgba(255,255,255,0.4)' }} />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
-                  style={{ ...styles.input, paddingLeft: '40px' }}
-                  required
-                  minLength={6}
-                />
+          ) : (
+            <>
+              <div style={styles.tabs}>
+                <button
+                  onClick={() => setActiveTab('login')}
+                  style={styles.tab(activeTab === 'login')}
+                >
+                  <LogIn style={{ width: '16px', height: '16px' }} />
+                  Sign In
+                </button>
+                <button
+                  onClick={() => setActiveTab('register')}
+                  style={styles.tab(activeTab === 'register')}
+                >
+                  <UserPlus style={{ width: '16px', height: '16px' }} />
+                  Sign Up
+                </button>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                ...styles.submitButton,
-                opacity: loading ? 0.6 : 1,
-                cursor: loading ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {loading ? 'Please wait...' : activeTab === 'login' ? 'Sign In' : 'Create Account'}
-            </button>
-          </form>
+              {error && <div style={styles.error}>{error}</div>}
+
+              <form onSubmit={handleSubmit} style={styles.form}>
+                {activeTab === 'register' && (
+                  <div style={styles.inputGroup}>
+                    <label style={styles.label}>Email</label>
+                    <div style={{ position: 'relative' }}>
+                      <Mail style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'rgba(255,255,255,0.4)' }} />
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        style={{ ...styles.input, paddingLeft: '40px' }}
+                        required={activeTab === 'register'}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Username</label>
+                  <div style={{ position: 'relative' }}>
+                    <User style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'rgba(255,255,255,0.4)' }} />
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="Enter username"
+                      style={{ ...styles.input, paddingLeft: '40px' }}
+                      required
+                      minLength={3}
+                      maxLength={20}
+                    />
+                  </div>
+                </div>
+
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Password</label>
+                  <div style={{ position: 'relative' }}>
+                    <Lock style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'rgba(255,255,255,0.4)' }} />
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter password"
+                      style={{ ...styles.input, paddingLeft: '40px' }}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    ...styles.submitButton,
+                    opacity: loading ? 0.6 : 1,
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {loading ? 'Please wait...' : activeTab === 'login' ? 'Sign In' : 'Create Account'}
+                </button>
+              </form>
+            </>
+          )}
         </motion.div>
       </motion.div>
     </AnimatePresence>

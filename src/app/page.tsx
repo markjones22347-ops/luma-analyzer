@@ -17,6 +17,8 @@ type ViewMode = 'scan' | 'stats' | 'community';
 interface User {
   id: string;
   username: string;
+  email: string;
+  emailVerified: boolean;
 }
 
 const styles = {
@@ -87,8 +89,6 @@ const styles = {
     fontSize: '13px',
     fontWeight: 500,
     cursor: 'pointer',
-    borderWidth: '1px',
-    borderStyle: 'solid',
   }),
   userDisplay: {
     display: 'flex',
@@ -200,6 +200,27 @@ const styles = {
     fontSize: '13px',
     color: 'rgba(255, 255, 255, 0.3)',
   },
+  loginPrompt: {
+    padding: '16px',
+    borderRadius: '8px',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    border: '1px solid rgba(59, 130, 246, 0.2)',
+    color: '#3b82f6',
+    fontSize: '14px',
+    textAlign: 'center' as const,
+    marginTop: '16px',
+  },
+  loginPromptButton: {
+    padding: '8px 16px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    border: '1px solid rgba(59, 130, 246, 0.3)',
+    color: '#3b82f6',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    marginTop: '12px',
+  },
 };
 
 export default function Home() {
@@ -211,58 +232,45 @@ export default function Home() {
   
   // Auth state
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   
   // Submission modal state
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
   const [submissionReport, setSubmissionReport] = useState<ScanReport | null>(null);
 
-  // Check for existing session on load
+  // Check for existing session on load (server-side cookies)
   useEffect(() => {
-    const savedToken = localStorage.getItem('luma_token');
-    if (savedToken) {
-      verifyToken(savedToken);
-    }
+    checkSession();
   }, []);
 
-  const verifyToken = async (savedToken: string) => {
+  const checkSession = async () => {
     try {
       const response = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'verify', token: savedToken }),
+        body: JSON.stringify({ action: 'check-session' }),
       });
       
       const data = await response.json();
       if (data.success) {
         setUser(data.user);
-        setToken(savedToken);
-      } else {
-        localStorage.removeItem('luma_token');
       }
     } catch (error) {
-      localStorage.removeItem('luma_token');
+      console.error('Session check failed:', error);
     }
   };
 
-  const handleAuth = (userData: User, userToken: string) => {
+  const handleAuth = (userData: User) => {
     setUser(userData);
-    setToken(userToken);
-    localStorage.setItem('luma_token', userToken);
   };
 
   const handleLogout = async () => {
-    if (token) {
-      await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'logout', token }),
-      });
-    }
+    await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'logout' }),
+    });
     setUser(null);
-    setToken(null);
-    localStorage.removeItem('luma_token');
   };
 
   const handleFileSelect = useCallback(async (file: File) => {
@@ -374,6 +382,10 @@ export default function Home() {
   }, []);
 
   const openSubmissionModal = (reportToSubmit: ScanReport) => {
+    if (!user) {
+      setAuthModalOpen(true);
+      return;
+    }
     setSubmissionReport(reportToSubmit);
     setSubmissionModalOpen(true);
   };
@@ -394,8 +406,7 @@ export default function Home() {
           onClose={() => setSubmissionModalOpen(false)}
           report={submissionReport}
           user={user}
-          token={token}
-          onSubmit={(details) => {
+          onSubmit={() => {
             alert('Submitted to community successfully!');
           }}
         />
@@ -507,6 +518,20 @@ export default function Home() {
                       onDownload={handleDownloadReport}
                       onSubmitToCommunity={openSubmissionModal}
                     />
+                    
+                    {/* Show login prompt if not logged in and score is high enough */}
+                    {!user && report.riskScore >= 41 && (
+                      <div style={styles.loginPrompt}>
+                        <p>Sign in to submit this script to the community database</p>
+                        <button 
+                          onClick={() => setAuthModalOpen(true)}
+                          style={styles.loginPromptButton}
+                        >
+                          Sign In to Submit
+                        </button>
+                      </div>
+                    )}
+                    
                     <button onClick={resetScan} style={styles.backButton}>
                       Analyze Another Script
                     </button>
@@ -541,14 +566,14 @@ export default function Home() {
                               style={{
                                 padding: '6px 12px',
                                 borderRadius: '4px',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                border: '1px solid rgba(59, 130, 246, 0.2)',
-                                color: '#3b82f6',
+                                backgroundColor: user ? 'rgba(59, 130, 246, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                                border: `1px solid ${user ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                color: user ? '#3b82f6' : 'rgba(255, 255, 255, 0.5)',
                                 fontSize: '12px',
                                 cursor: 'pointer',
                               }}
                             >
-                              Submit to Community
+                              {user ? 'Submit to Community' : 'Sign in to Submit'}
                             </button>
                           )}
                         </div>
