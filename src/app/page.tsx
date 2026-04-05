@@ -47,6 +47,8 @@ end
 local jsonData = game:GetService("HttpService"):JSONEncode(playerData)
 suspiciousFunction()`;
 
+type ViewMode = 'scan' | 'community';
+
 interface User {
   id: string;
   username: string;
@@ -255,6 +257,17 @@ const styles = {
     textAlign: 'center' as const,
     marginTop: '16px',
   },
+  loginPromptButton: {
+    padding: '8px 16px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    border: '1px solid rgba(59, 130, 246, 0.3)',
+    color: '#3b82f6',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    marginTop: '12px',
+  },
   sampleButton: {
     display: 'flex',
     alignItems: 'center',
@@ -369,6 +382,7 @@ const styles = {
     color: '#5865f2',
     marginTop: '12px',
   },
+};
 
 export default function Home() {
   const [viewMode, setViewMode] = useState<ViewMode>('scan');
