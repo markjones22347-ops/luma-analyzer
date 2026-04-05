@@ -1,7 +1,4 @@
-/**
- * User Authentication Store with Email Verification
- * Server-side sessions with HTTP-only cookies
- */
+import { sql } from '@vercel/postgres';
 
 export interface User {
   id: string;
@@ -27,12 +24,54 @@ function generateVerificationCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-class AuthStore {
-  private users: Map<string, User> = new Map();
-  private sessions: Map<string, Session> = new Map();
-  private userIdCounter = 1;
+function generateToken(): string {
+  return `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
 
-  register(username: string, email: string, password: string): { success: boolean; user?: User; error?: string } {
+class AuthStore {
+  private initialized = false;
+
+  private async init() {
+    if (this.initialized) return;
+    
+    try {
+      // Create tables if they don't exist
+      await sql`
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          username TEXT UNIQUE NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          email_verified BOOLEAN DEFAULT FALSE,
+          verification_code TEXT,
+          verification_expiry TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `;
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS sessions (
+          token TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          username TEXT NOT NULL,
+          email TEXT NOT NULL,
+          email_verified BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `;
+
+      this.initialized = true;
+      console.log('[AuthStore] Database initialized');
+    } catch (error) {
+      console.error('[AuthStore] Failed to initialize:', error);
+      throw error;
+    }
+  }
+
+  async register(username: string, email: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> {
+    await this.init();
+
+    // Validate
     if (!username || username.length < 3 || username.length > 20) {
       return { success: false, error: 'Username must be 3-20 characters' };
     }
@@ -46,128 +85,277 @@ class AuthStore {
       return { success: false, error: 'Password must be at least 6 characters' };
     }
 
-    if (this.users.has(username.toLowerCase())) {
-      return { success: false, error: 'Username already exists' };
-    }
+    const lowerUsername = username.toLowerCase();
+    const lowerEmail = email.toLowerCase();
 
-    for (const user of this.users.values()) {
-      if (user.email.toLowerCase() === email.toLowerCase()) {
+    try {
+      // Check if username exists
+      const existingUser = await sql`SELECT id FROM users WHERE username = ${lowerUsername}`;
+      if (existingUser.rowCount > 0) {
+        return { success: false, error: 'Username already exists' };
+      }
+
+      // Check if email exists
+      const existingEmail = await sql`SELECT id FROM users WHERE email = ${lowerEmail}`;
+      if (existingEmail.rowCount > 0) {
         return { success: false, error: 'Email already registered' };
       }
+
+      const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const verificationCode = generateVerificationCode();
+      const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      await sql`
+        INSERT INTO users (id, username, email, password_hash, email_verified, verification_code, verification_expiry)
+        VALUES (${userId}, ${lowerUsername}, ${lowerEmail}, ${password}, FALSE, ${verificationCode}, ${verificationExpiry})
+      `;
+
+      const user: User = {
+        id: userId,
+        username: lowerUsername,
+        email: lowerEmail,
+        passwordHash: password,
+        emailVerified: false,
+        verificationCode,
+        verificationExpiry,
+        createdAt: new Date().toISOString(),
+      };
+
+      return { success: true, user };
+    } catch (error) {
+      console.error('[AuthStore] Register error:', error);
+      return { success: false, error: 'Registration failed' };
     }
-
-    const verificationCode = generateVerificationCode();
-    const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-    const user: User = {
-      id: `user_${this.userIdCounter++}`,
-      username: username.toLowerCase(),
-      email: email.toLowerCase(),
-      passwordHash: password,
-      emailVerified: false,
-      verificationCode,
-      verificationExpiry,
-      createdAt: new Date().toISOString(),
-    };
-
-    this.users.set(username.toLowerCase(), user);
-    return { success: true, user };
   }
 
-  verifyEmail(username: string, code: string): { success: boolean; error?: string } {
-    const user = this.users.get(username.toLowerCase());
-    
-    if (!user) {
-      return { success: false, error: 'User not found' };
+  async verifyEmail(username: string, code: string): Promise<{ success: boolean; error?: string }> {
+    await this.init();
+
+    try {
+      const lowerUsername = username.toLowerCase();
+      
+      const result = await sql`
+        SELECT * FROM users WHERE username = ${lowerUsername}
+      `;
+
+      if (result.rowCount === 0) {
+        return { success: false, error: 'User not found' };
+      }
+
+      const user = result.rows[0];
+
+      if (user.email_verified) {
+        return { success: false, error: 'Email already verified' };
+      }
+
+      if (user.verification_code !== code) {
+        return { success: false, error: 'Invalid verification code' };
+      }
+
+      if (new Date() > new Date(user.verification_expiry)) {
+        return { success: false, error: 'Verification code expired' };
+      }
+
+      await sql`
+        UPDATE users 
+        SET email_verified = TRUE, verification_code = NULL, verification_expiry = NULL
+        WHERE username = ${lowerUsername}
+      `;
+
+      return { success: true };
+    } catch (error) {
+      console.error('[AuthStore] Verify email error:', error);
+      return { success: false, error: 'Verification failed' };
     }
-
-    if (user.emailVerified) {
-      return { success: false, error: 'Email already verified' };
-    }
-
-    if (user.verificationCode !== code) {
-      return { success: false, error: 'Invalid verification code' };
-    }
-
-    if (user.verificationExpiry && new Date() > new Date(user.verificationExpiry)) {
-      return { success: false, error: 'Verification code expired' };
-    }
-
-    user.emailVerified = true;
-    user.verificationCode = undefined;
-    user.verificationExpiry = undefined;
-
-    return { success: true };
   }
 
-  resendVerification(username: string): { success: boolean; code?: string; error?: string } {
-    const user = this.users.get(username.toLowerCase());
-    
-    if (!user) {
-      return { success: false, error: 'User not found' };
+  async resendVerification(username: string): Promise<{ success: boolean; code?: string; error?: string }> {
+    await this.init();
+
+    try {
+      const lowerUsername = username.toLowerCase();
+      
+      const result = await sql`
+        SELECT * FROM users WHERE username = ${lowerUsername}
+      `;
+
+      if (result.rowCount === 0) {
+        return { success: false, error: 'User not found' };
+      }
+
+      const user = result.rows[0];
+
+      if (user.email_verified) {
+        return { success: false, error: 'Email already verified' };
+      }
+
+      const newCode = generateVerificationCode();
+      const newExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      await sql`
+        UPDATE users 
+        SET verification_code = ${newCode}, verification_expiry = ${newExpiry}
+        WHERE username = ${lowerUsername}
+      `;
+
+      return { success: true, code: newCode };
+    } catch (error) {
+      console.error('[AuthStore] Resend verification error:', error);
+      return { success: false, error: 'Failed to resend code' };
     }
+  }
 
-    if (user.emailVerified) {
-      return { success: false, error: 'Email already verified' };
+  async login(username: string, password: string): Promise<{ success: boolean; session?: Session; error?: string; needsVerification?: boolean }> {
+    await this.init();
+
+    try {
+      const lowerUsername = username.toLowerCase();
+      
+      const result = await sql`
+        SELECT * FROM users WHERE username = ${lowerUsername}
+      `;
+
+      if (result.rowCount === 0) {
+        return { success: false, error: 'Invalid username or password' };
+      }
+
+      const user = result.rows[0];
+
+      if (user.password_hash !== password) {
+        return { success: false, error: 'Invalid username or password' };
+      }
+
+      if (!user.email_verified) {
+        return { success: false, error: 'Please verify your email before logging in', needsVerification: true };
+      }
+
+      const token = generateToken();
+
+      await sql`
+        INSERT INTO sessions (token, user_id, username, email, email_verified)
+        VALUES (${token}, ${user.id}, ${user.username}, ${user.email}, ${user.email_verified})
+      `;
+
+      const session: Session = {
+        userId: user.id,
+        username: user.username,
+        email: user.email,
+        emailVerified: user.email_verified,
+        token,
+        createdAt: new Date().toISOString(),
+      };
+
+      return { success: true, session };
+    } catch (error) {
+      console.error('[AuthStore] Login error:', error);
+      return { success: false, error: 'Login failed' };
     }
-
-    user.verificationCode = generateVerificationCode();
-    user.verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-    return { success: true, code: user.verificationCode };
   }
 
-  login(username: string, password: string): { success: boolean; session?: Session; error?: string } {
-    const user = this.users.get(username.toLowerCase());
-    
-    if (!user) {
-      return { success: false, error: 'Invalid username or password' };
+  async validateToken(token: string): Promise<Session | null> {
+    await this.init();
+
+    try {
+      const result = await sql`
+        SELECT * FROM sessions WHERE token = ${token}
+      `;
+
+      if (result.rowCount === 0) {
+        return null;
+      }
+
+      const session = result.rows[0];
+
+      return {
+        userId: session.user_id,
+        username: session.username,
+        email: session.email,
+        emailVerified: session.email_verified,
+        token: session.token,
+        createdAt: session.created_at,
+      };
+    } catch (error) {
+      console.error('[AuthStore] Validate token error:', error);
+      return null;
     }
+  }
 
-    if (user.passwordHash !== password) {
-      return { success: false, error: 'Invalid username or password' };
+  async logout(token: string): Promise<boolean> {
+    await this.init();
+
+    try {
+      await sql`DELETE FROM sessions WHERE token = ${token}`;
+      return true;
+    } catch (error) {
+      console.error('[AuthStore] Logout error:', error);
+      return false;
     }
-
-    const token = this.generateToken();
-    const session: Session = {
-      userId: user.id,
-      username: user.username,
-      email: user.email,
-      emailVerified: user.emailVerified,
-      token,
-      createdAt: new Date().toISOString(),
-    };
-
-    this.sessions.set(token, session);
-    return { success: true, session };
   }
 
-  validateToken(token: string): Session | null {
-    return this.sessions.get(token) || null;
-  }
+  async getUserById(userId: string): Promise<User | undefined> {
+    await this.init();
 
-  logout(token: string): boolean {
-    return this.sessions.delete(token);
-  }
+    try {
+      const result = await sql`SELECT * FROM users WHERE id = ${userId}`;
+      
+      if (result.rowCount === 0) return undefined;
 
-  getUserById(userId: string): User | undefined {
-    for (const user of this.users.values()) {
-      if (user.id === userId) return user;
+      const user = result.rows[0];
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        passwordHash: user.password_hash,
+        emailVerified: user.email_verified,
+        verificationCode: user.verification_code,
+        verificationExpiry: user.verification_expiry,
+        createdAt: user.created_at,
+      };
+    } catch (error) {
+      console.error('[AuthStore] Get user error:', error);
+      return undefined;
     }
-    return undefined;
   }
 
-  getUserByUsername(username: string): User | undefined {
-    return this.users.get(username.toLowerCase());
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    await this.init();
+
+    try {
+      const lowerUsername = username.toLowerCase();
+      const result = await sql`SELECT * FROM users WHERE username = ${lowerUsername}`;
+      
+      if (result.rowCount === 0) return undefined;
+
+      const user = result.rows[0];
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        passwordHash: user.password_hash,
+        emailVerified: user.email_verified,
+        verificationCode: user.verification_code,
+        verificationExpiry: user.verification_expiry,
+        createdAt: user.created_at,
+      };
+    } catch (error) {
+      console.error('[AuthStore] Get user error:', error);
+      return undefined;
+    }
   }
 
-  userExists(username: string): boolean {
-    return this.users.has(username.toLowerCase());
-  }
+  async userExists(username: string): Promise<boolean> {
+    await this.init();
 
-  private generateToken(): string {
-    return `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    try {
+      const lowerUsername = username.toLowerCase();
+      const result = await sql`SELECT id FROM users WHERE username = ${lowerUsername}`;
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error('[AuthStore] User exists error:', error);
+      return false;
+    }
   }
 }
 
+// Export singleton instance
 export const authStore = new AuthStore();
