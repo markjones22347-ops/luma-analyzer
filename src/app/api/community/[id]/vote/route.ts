@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { communitySubmissions } from '@/lib/community-submissions';
+import { authStore } from '@/lib/auth-store';
 
 export async function POST(
   request: Request,
@@ -17,18 +18,37 @@ export async function POST(
       );
     }
 
-    const submission = communitySubmissions.vote(id, vote);
-
-    if (!submission) {
+    // Get user from cookie
+    const cookieHeader = request.headers.get('cookie');
+    const token = cookieHeader?.match(/luma_session=([^;]+)/)?.[1];
+    
+    if (!token) {
       return NextResponse.json(
-        { error: 'Submission not found' },
-        { status: 404 }
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const session = await authStore.validateToken(token);
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Invalid session' },
+        { status: 401 }
+      );
+    }
+
+    const result = await communitySubmissions.vote(id, session.userId, vote);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error || 'Failed to vote' },
+        { status: 400 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      submission,
+      submission: result.submission,
     });
   } catch (error) {
     return NextResponse.json(
