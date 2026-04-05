@@ -31,7 +31,14 @@ const ADMIN_TOKEN = 'pvKcCHCd6Vf78E8XrbsUrovHvosf1RlX';
  * Persistent across deployments with per-user voting
  */
 class CommunitySubmissionsStore {
-  private supabase = createServerClient();
+  private _supabase: ReturnType<typeof createServerClient> | null = null;
+  
+  private get supabase() {
+    if (!this._supabase) {
+      this._supabase = createServerClient();
+    }
+    return this._supabase;
+  }
 
   async submit(
     report: ScanReport, 

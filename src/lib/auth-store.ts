@@ -41,7 +41,14 @@ function generateToken(): string {
 }
 
 class AuthStore {
-  private supabase = createServerClient();
+  private _supabase: ReturnType<typeof createServerClient> | null = null;
+  
+  private get supabase() {
+    if (!this._supabase) {
+      this._supabase = createServerClient();
+    }
+    return this._supabase;
+  }
 
   async register(username: string, email: string, password: string): Promise<{ success: boolean; user?: User; error?: string }> {
     try {
