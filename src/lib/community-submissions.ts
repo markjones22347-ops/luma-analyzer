@@ -4,6 +4,7 @@ export interface CommunitySubmission {
   id: string;
   scanId: string;
   submittedBy: string;
+  userId?: string;
   submittedAt: string;
   status: 'pending' | 'verified' | 'rejected';
   report: ScanReport;
@@ -12,7 +13,16 @@ export interface CommunitySubmission {
     downvotes: number;
   };
   notes?: string;
+  // Extended submission details
+  details?: {
+    scriptName: string;
+    description: string;
+    source?: string;
+    tags?: string[];
+  };
 }
+
+const ADMIN_TOKEN = 'pvKcCHCd6Vf78E8XrbsUrovHvosf1RlX';
 
 /**
  * Community Submissions Store
@@ -25,7 +35,12 @@ class CommunitySubmissionsStore {
   /**
    * Submit a scan report to the community database
    */
-  submit(report: ScanReport, submittedBy: string = 'Anonymous'): CommunitySubmission {
+  submit(
+    report: ScanReport, 
+    submittedBy: string = 'Anonymous',
+    userId?: string,
+    details?: { scriptName: string; description: string; source?: string; tags?: string[] }
+  ): CommunitySubmission {
     // Only allow submissions for medium+ risk scores
     if (report.riskScore < 41) {
       throw new Error('Only scripts with MODERATE risk or higher can be submitted');
@@ -35,6 +50,7 @@ class CommunitySubmissionsStore {
       id: `sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       scanId: report.id,
       submittedBy,
+      userId,
       submittedAt: new Date().toISOString(),
       status: 'pending',
       report,
@@ -42,6 +58,7 @@ class CommunitySubmissionsStore {
         upvotes: 0,
         downvotes: 0,
       },
+      details,
     };
 
     this.submissions.push(submission);
@@ -51,6 +68,23 @@ class CommunitySubmissionsStore {
     }
 
     return submission;
+  }
+
+  /**
+   * Delete a submission (admin only with token)
+   */
+  delete(submissionId: string, adminToken: string): { success: boolean; error?: string } {
+    if (adminToken !== ADMIN_TOKEN) {
+      return { success: false, error: 'Invalid admin token' };
+    }
+
+    const index = this.submissions.findIndex(s => s.id === submissionId);
+    if (index === -1) {
+      return { success: false, error: 'Submission not found' };
+    }
+
+    this.submissions.splice(index, 1);
+    return { success: true };
   }
 
   /**
@@ -87,7 +121,11 @@ class CommunitySubmissionsStore {
   /**
    * Moderate a submission (admin only)
    */
-  moderate(submissionId: string, status: 'verified' | 'rejected', notes?: string): CommunitySubmission | null {
+  moderate(submissionId: string, status: 'verified' | 'rejected', adminToken: string, notes?: string): CommunitySubmission | null {
+    if (adminToken !== ADMIN_TOKEN) {
+      return null;
+    }
+
     const submission = this.submissions.find(s => s.id === submissionId);
     if (!submission) return null;
 

@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ThumbsUp, ThumbsDown, Shield, AlertTriangle, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Users, ThumbsUp, ThumbsDown, Shield, AlertTriangle, CheckCircle, XCircle, Clock, Trash2 } from 'lucide-react';
+import { AdminDeleteModal } from './admin-delete-modal';
 
 interface Submission {
   id: string;
   scanId: string;
   submittedBy: string;
+  userId?: string;
   submittedAt: string;
   status: 'pending' | 'verified' | 'rejected';
   report: {
@@ -22,6 +24,12 @@ interface Submission {
   votes: {
     upvotes: number;
     downvotes: number;
+  };
+  details?: {
+    scriptName: string;
+    description: string;
+    source?: string;
+    tags?: string[];
   };
 }
 
@@ -127,11 +135,30 @@ const styles = {
            score <= 60 ? '#f97316' : 
            score <= 80 ? '#ef4444' : '#dc2626',
   }),
-  summary: {
+  description: {
     fontSize: '13px',
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: 'rgba(255, 255, 255, 0.7)',
     lineHeight: 1.5,
     marginBottom: '12px',
+  },
+  summary: {
+    fontSize: '13px',
+    color: 'rgba(255, 255, 255, 0.5)',
+    lineHeight: 1.4,
+    marginBottom: '12px',
+  },
+  tags: {
+    display: 'flex',
+    gap: '6px',
+    flexWrap: 'wrap' as const,
+    marginBottom: '12px',
+  },
+  tag: {
+    padding: '4px 10px',
+    borderRadius: '4px',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    fontSize: '12px',
+    color: 'rgba(255, 255, 255, 0.6)',
   },
   actions: {
     display: 'flex',
@@ -154,6 +181,18 @@ const styles = {
     backgroundColor: type === 'up' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
     color: type === 'up' ? '#22c55e' : '#ef4444',
   }),
+  deleteButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 12px',
+    borderRadius: '4px',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    border: '1px solid rgba(239, 68, 68, 0.2)',
+    color: '#ef4444',
+    fontSize: '12px',
+    cursor: 'pointer',
+  },
   hash: {
     fontSize: '12px',
     color: 'rgba(255, 255, 255, 0.3)',
@@ -185,6 +224,10 @@ export function CommunitySubmissions() {
   const [stats, setStats] = useState<CommunityStats | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'verified' | 'rejected'>('all');
   const [loading, setLoading] = useState(true);
+  
+  // Admin delete modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
 
   useEffect(() => {
     fetchSubmissions();
@@ -221,6 +264,15 @@ export function CommunitySubmissions() {
     }
   };
 
+  const openDeleteModal = (submission: Submission) => {
+    setSelectedSubmission(submission);
+    setDeleteModalOpen(true);
+  };
+
+  const handleDelete = () => {
+    fetchSubmissions();
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'verified': return <CheckCircle style={{ width: '14px', height: '14px' }} />;
@@ -239,6 +291,17 @@ export function CommunitySubmissions() {
 
   return (
     <div style={styles.container}>
+      {/* Admin Delete Modal */}
+      {selectedSubmission && (
+        <AdminDeleteModal
+          isOpen={deleteModalOpen}
+          onClose={() => setDeleteModalOpen(false)}
+          submissionId={selectedSubmission.id}
+          submissionName={selectedSubmission.details?.scriptName || selectedSubmission.report.fileMetadata.filename || 'Unknown'}
+          onDelete={handleDelete}
+        />
+      )}
+
       <div style={styles.header}>
         <Users style={{ width: '24px', height: '24px', color: '#ffffff' }} />
         <h2 style={styles.title}>Community Submissions</h2>
@@ -290,7 +353,7 @@ export function CommunitySubmissions() {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <span style={styles.submissionTitle}>
-                    {sub.report.fileMetadata.filename || 'Unknown File'}
+                    {sub.details?.scriptName || sub.report.fileMetadata.filename || 'Unknown Script'}
                   </span>
                   <span style={styles.riskScore(sub.report.riskScore)}>
                     {sub.report.riskScore}/100
@@ -306,7 +369,19 @@ export function CommunitySubmissions() {
               </span>
             </div>
 
+            {sub.details?.description && (
+              <p style={styles.description}>{sub.details.description}</p>
+            )}
+
             <p style={styles.summary}>{sub.report.summary}</p>
+
+            {sub.details?.tags && sub.details.tags.length > 0 && (
+              <div style={styles.tags}>
+                {sub.details.tags.map((tag, i) => (
+                  <span key={i} style={styles.tag}>{tag}</span>
+                ))}
+              </div>
+            )}
 
             <div style={styles.hash}>Hash: {sub.report.fileMetadata.hash.substring(0, 16)}...</div>
 
@@ -327,6 +402,14 @@ export function CommunitySubmissions() {
                   {sub.votes.downvotes}
                 </button>
               </div>
+
+              <button
+                onClick={() => openDeleteModal(sub)}
+                style={styles.deleteButton}
+              >
+                <Trash2 style={{ width: '14px', height: '14px' }} />
+                Delete
+              </button>
             </div>
           </motion.div>
         ))

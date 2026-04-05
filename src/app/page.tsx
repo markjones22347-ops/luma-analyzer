@@ -1,16 +1,23 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileUpload } from '@/components/file-upload';
 import { ScanResults } from '@/components/scan-results';
 import { StatisticsDashboard } from '@/components/statistics-dashboard';
 import { CommunitySubmissions } from '@/components/community-submissions';
+import { AuthModal } from '@/components/auth-modal';
+import { SubmissionModal } from '@/components/submission-modal';
 import { ScanningAnimation } from '@/components/scanning-animation';
 import { ScanReport } from '@/types';
-import { Shield, Github, BarChart3, Users, Globe } from 'lucide-react';
+import { Shield, Github, BarChart3, Users, User, LogOut } from 'lucide-react';
 
 type ViewMode = 'scan' | 'stats' | 'community';
+
+interface User {
+  id: string;
+  username: string;
+}
 
 const styles = {
   main: {
@@ -68,6 +75,31 @@ const styles = {
     cursor: 'pointer',
     transition: 'all 0.2s',
   }),
+  authButton: (isLoggedIn: boolean) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '8px 14px',
+    borderRadius: '4px',
+    backgroundColor: isLoggedIn ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+    border: `1px solid ${isLoggedIn ? 'rgba(239, 68, 68, 0.2)' : 'rgba(59, 130, 246, 0.2)'}`,
+    color: isLoggedIn ? '#ef4444' : '#3b82f6',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+  }),
+  userDisplay: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '6px 12px',
+    borderRadius: '4px',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    fontSize: '13px',
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
   githubLink: {
     display: 'flex',
     alignItems: 'center',
@@ -176,6 +208,62 @@ export default function Home() {
   const [report, setReport] = useState<ScanReport | null>(null);
   const [bulkReports, setBulkReports] = useState<ScanReport[]>([]);
   const [error, setError] = useState<string | null>(null);
+  
+  // Auth state
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  
+  // Submission modal state
+  const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
+  const [submissionReport, setSubmissionReport] = useState<ScanReport | null>(null);
+
+  // Check for existing session on load
+  useEffect(() => {
+    const savedToken = localStorage.getItem('luma_token');
+    if (savedToken) {
+      verifyToken(savedToken);
+    }
+  }, []);
+
+  const verifyToken = async (savedToken: string) => {
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify', token: savedToken }),
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        setUser(data.user);
+        setToken(savedToken);
+      } else {
+        localStorage.removeItem('luma_token');
+      }
+    } catch (error) {
+      localStorage.removeItem('luma_token');
+    }
+  };
+
+  const handleAuth = (userData: User, userToken: string) => {
+    setUser(userData);
+    setToken(userToken);
+    localStorage.setItem('luma_token', userToken);
+  };
+
+  const handleLogout = async () => {
+    if (token) {
+      await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'logout', token }),
+      });
+    }
+    setUser(null);
+    setToken(null);
+    localStorage.removeItem('luma_token');
+  };
 
   const handleFileSelect = useCallback(async (file: File) => {
     setIsScanning(true);
@@ -285,31 +373,34 @@ export default function Home() {
     setError(null);
   }, []);
 
-  const submitToCommunity = useCallback(async (report: ScanReport) => {
-    try {
-      const response = await fetch('/api/community', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scanId: report.id,
-          submittedBy: 'Anonymous',
-          report: report,
-        }),
-      });
-
-      if (response.ok) {
-        alert('Submitted to community successfully!');
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Failed to submit');
-      }
-    } catch (error) {
-      alert('Failed to submit to community');
-    }
-  }, []);
+  const openSubmissionModal = (reportToSubmit: ScanReport) => {
+    setSubmissionReport(reportToSubmit);
+    setSubmissionModalOpen(true);
+  };
 
   return (
     <main style={styles.main}>
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onAuth={handleAuth}
+      />
+
+      {/* Submission Modal */}
+      {submissionReport && (
+        <SubmissionModal
+          isOpen={submissionModalOpen}
+          onClose={() => setSubmissionModalOpen(false)}
+          report={submissionReport}
+          user={user}
+          token={token}
+          onSubmit={(details) => {
+            alert('Submitted to community successfully!');
+          }}
+        />
+      )}
+
       {/* Header */}
       <header style={styles.header}>
         <div style={styles.headerInner}>
@@ -344,15 +435,41 @@ export default function Home() {
             </button>
           </nav>
 
-          <a
-            href="https://github.com/markjones22347-ops/luma-analyzer"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={styles.githubLink}
-          >
-            <Github style={{ width: '14px', height: '14px' }} />
-            <span>GitHub</span>
-          </a>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {user ? (
+              <>
+                <div style={styles.userDisplay}>
+                  <User style={{ width: '14px', height: '14px' }} />
+                  <span>{user.username}</span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  style={styles.authButton(true)}
+                >
+                  <LogOut style={{ width: '14px', height: '14px' }} />
+                  <span>Logout</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setAuthModalOpen(true)}
+                style={styles.authButton(false)}
+              >
+                <User style={{ width: '14px', height: '14px' }} />
+                <span>Sign In</span>
+              </button>
+            )}
+
+            <a
+              href="https://github.com/markjones22347-ops/luma-analyzer"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={styles.githubLink}
+            >
+              <Github style={{ width: '14px', height: '14px' }} />
+              <span>GitHub</span>
+            </a>
+          </div>
         </div>
       </header>
 
@@ -385,24 +502,11 @@ export default function Home() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                   >
-                    <ScanResults report={report} onDownload={handleDownloadReport} />
-                    
-                    {/* Community Submit Button */}
-                    {report.riskScore >= 41 && (
-                      <button
-                        onClick={() => submitToCommunity(report)}
-                        style={{
-                          ...styles.backButton,
-                          marginTop: '12px',
-                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                          borderColor: 'rgba(59, 130, 246, 0.2)',
-                        }}
-                      >
-                        <Globe style={{ width: '16px', height: '16px', marginRight: '8px', display: 'inline' }} />
-                        Submit to Community Database
-                      </button>
-                    )}
-                    
+                    <ScanResults 
+                      report={report} 
+                      onDownload={handleDownloadReport}
+                      onSubmitToCommunity={openSubmissionModal}
+                    />
                     <button onClick={resetScan} style={styles.backButton}>
                       Analyze Another Script
                     </button>
@@ -433,7 +537,7 @@ export default function Home() {
                           </p>
                           {r.riskScore >= 41 && (
                             <button
-                              onClick={() => submitToCommunity(r)}
+                              onClick={() => openSubmissionModal(r)}
                               style={{
                                 padding: '6px 12px',
                                 borderRadius: '4px',
