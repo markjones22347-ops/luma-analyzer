@@ -413,6 +413,12 @@ export class PatternMatcher {
           } else if (url.includes('pastebin.com')) {
             type = 'pastebin';
             risk = 'medium';
+          } else if (url.includes('roblox.com') || /^(https?:\/\/)?(www\.)?roblox\.com/i.test(url)) {
+            type = 'roblox';
+            risk = 'low';
+          } else if (url.includes('cloudflare.com') || url.includes('workers.dev') || /^(https?:\/\/)?.*\.cloudflare\.com/i.test(url) || /^(https?:\/\/)?.*\.workers\.dev/i.test(url)) {
+            type = 'cloudflare';
+            risk = 'medium';
           } else if (this.URL_PATTERNS.grabify.test(url)) {
             type = 'ipgrabber';
             risk = 'high';

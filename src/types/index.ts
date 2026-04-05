@@ -29,7 +29,7 @@ export interface Detection {
 
 export interface ExtractedUrl {
   url: string;
-  type: 'webhook' | 'github' | 'pastebin' | 'ipgrabber' | 'shortener' | 'suspicious' | 'unknown';
+  type: 'webhook' | 'github' | 'pastebin' | 'roblox' | 'cloudflare' | 'ipgrabber' | 'shortener' | 'suspicious' | 'unknown';
   line: number;
   risk: 'low' | 'medium' | 'high';
 }
