@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { authStore } from '@/lib/auth-store';
+import { sendVerificationEmail } from '@/lib/email';
 
 const COOKIE_NAME = 'luma_session';
 const COOKIE_OPTIONS = {
@@ -22,12 +23,24 @@ export async function POST(request: Request) {
     if (action === 'register') {
       const result = authStore.register(username, email, password);
       if (result.success) {
-        // Return verification code for demo (in production, send email)
+        // Send actual verification email via Gmail
+        const emailResult = await sendVerificationEmail(
+          email,
+          username,
+          result.user!.verificationCode!
+        );
+        
+        if (!emailResult.success) {
+          return NextResponse.json(
+            { success: false, error: 'Failed to send verification email. Please try again.' },
+            { status: 500 }
+          );
+        }
+        
         return NextResponse.json({
           success: true,
           user: { id: result.user!.id, username: result.user!.username, email: result.user!.email },
-          verificationCode: result.user!.verificationCode, // Remove in production - send actual email
-          message: 'Registration successful. Please verify your email.',
+          message: 'Registration successful. Please check your email for the verification code.',
         });
       } else {
         return NextResponse.json(
@@ -60,10 +73,26 @@ export async function POST(request: Request) {
     } else if (action === 'resend-verification') {
       const result = authStore.resendVerification(username);
       if (result.success) {
+        const user = authStore.getUserByUsername(username);
+        if (user) {
+          // Send new verification email
+          const emailResult = await sendVerificationEmail(
+            user.email,
+            username,
+            result.code!
+          );
+          
+          if (!emailResult.success) {
+            return NextResponse.json(
+              { success: false, error: 'Failed to send verification email.' },
+              { status: 500 }
+            );
+          }
+        }
+        
         return NextResponse.json({
           success: true,
-          verificationCode: result.code, // Remove in production - send actual email
-          message: 'Verification code resent.',
+          message: 'New verification code sent to your email.',
         });
       } else {
         return NextResponse.json(

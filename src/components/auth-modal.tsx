@@ -122,16 +122,21 @@ const styles = {
     textAlign: 'center' as const,
     padding: '20px',
   },
-  verificationCode: {
-    fontSize: '32px',
-    fontWeight: 700,
+  verificationTitle: {
+    fontSize: '18px',
+    fontWeight: 600,
+    color: '#22c55e',
+    marginBottom: '12px',
+  },
+  verificationText: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: '14px',
+    lineHeight: 1.5,
+    marginBottom: '20px',
+  },
+  emailHighlight: {
     color: '#3b82f6',
-    letterSpacing: '8px',
-    margin: '20px 0',
-    padding: '20px',
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    borderRadius: '8px',
-    border: '1px solid rgba(59, 130, 246, 0.3)',
+    fontWeight: 600,
   },
   resendButton: {
     display: 'flex',
@@ -161,7 +166,7 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
   // Verification flow state
   const [needsVerification, setNeedsVerification] = useState(false);
   const [pendingUsername, setPendingUsername] = useState('');
-  const [demoCode, setDemoCode] = useState<string | null>(null); // Remove in production
+  const [pendingEmail, setPendingEmail] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,8 +193,8 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
           // Show verification step
           setNeedsVerification(true);
           setPendingUsername(data.user.username);
-          setDemoCode(data.verificationCode); // Remove in production - for demo only
-          setSuccess('Registration successful! Please check your email for verification code.');
+          setPendingEmail(data.user.email);
+          setSuccess(data.message);
         } else {
           // Login successful
           onAuth(data.user);
@@ -259,8 +264,7 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
       const data = await response.json();
 
       if (data.success) {
-        setDemoCode(data.verificationCode); // Remove in production
-        setSuccess('New verification code sent!');
+        setSuccess(data.message);
       } else {
         setError(data.error || 'Failed to resend code');
       }
@@ -274,8 +278,8 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
   const resetForm = () => {
     setNeedsVerification(false);
     setPendingUsername('');
+    setPendingEmail('');
     setVerificationCode('');
-    setDemoCode(null);
     setError(null);
     setSuccess(null);
   };
@@ -310,15 +314,12 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
           {needsVerification ? (
             <div style={styles.verificationBox}>
               <CheckCircle style={{ width: '48px', height: '48px', color: '#22c55e', marginBottom: '16px' }} />
-              <p style={{ color: 'rgba(255,255,255,0.8)', marginBottom: '20px' }}>
-                Enter the 6-digit code sent to your email
+              <p style={styles.verificationTitle}>Check your email</p>
+              <p style={styles.verificationText}>
+                We've sent a 6-digit verification code to<br />
+                <span style={styles.emailHighlight}>{pendingEmail}</span>
               </p>
               
-              {/* DEMO ONLY: Show code (remove in production) */}
-              {demoCode && (
-                <div style={styles.verificationCode}>{demoCode}</div>
-              )}
-
               {error && <div style={styles.error}>{error}</div>}
               {success && <div style={styles.success}>{success}</div>}
 
@@ -328,7 +329,7 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
                     type="text"
                     value={verificationCode}
                     onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="000000"
+                    placeholder="Enter 6-digit code"
                     style={{ ...styles.input, textAlign: 'center', fontSize: '24px', letterSpacing: '8px' }}
                     required
                     maxLength={6}
