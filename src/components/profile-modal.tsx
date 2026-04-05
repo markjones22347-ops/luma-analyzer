@@ -248,7 +248,7 @@ export function ProfileModal({ isOpen, onClose, user, isOwnProfile, onUpdateBio 
     scansPerformed: 0,
     scriptsSubmitted: 0,
     totalUpvotes: 0,
-    joinedAt: user.createdAt || new Date().toISOString(),
+    joinedAt: new Date().toISOString(),
   };
 
   return (
