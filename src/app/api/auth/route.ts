@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const existingToken = cookieHeader?.match(/luma_session=([^;]+)/)?.[1];
 
     if (action === 'register') {
-      const result = await authStore.register(username, email, password);
+      const result = authStore.register(username, email, password);
       if (result.success) {
         // Send actual verification email via Gmail
         const emailResult = await sendVerificationEmail(
@@ -49,12 +49,12 @@ export async function POST(request: Request) {
         );
       }
     } else if (action === 'verify-email') {
-      const result = await authStore.verifyEmail(username, code);
+      const result = authStore.verifyEmail(username, code);
       if (result.success) {
         // Auto-login after verification
-        const user = await authStore.getUserByUsername(username);
+        const user = authStore.getUserByUsername(username);
         if (user) {
-          const loginResult = await authStore.login(username, user.passwordHash);
+          const loginResult = authStore.login(username, user.passwordHash);
           if (loginResult.success) {
             const response = NextResponse.json({
               success: true,
@@ -71,9 +71,9 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     } else if (action === 'resend-verification') {
-      const result = await authStore.resendVerification(username);
+      const result = authStore.resendVerification(username);
       if (result.success) {
-        const user = await authStore.getUserByUsername(username);
+        const user = authStore.getUserByUsername(username);
         if (user) {
           // Send new verification email
           const emailResult = await sendVerificationEmail(
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
         );
       }
     } else if (action === 'login') {
-      const result = await authStore.login(username, password);
+      const result = authStore.login(username, password);
       if (result.success) {
         const response = NextResponse.json({
           success: true,
@@ -126,14 +126,14 @@ export async function POST(request: Request) {
       }
     } else if (action === 'logout') {
       if (existingToken) {
-        await authStore.logout(existingToken);
+        authStore.logout(existingToken);
       }
       const response = NextResponse.json({ success: true });
       response.cookies.delete(COOKIE_NAME);
       return response;
     } else if (action === 'verify') {
       if (existingToken) {
-        const session = await authStore.validateToken(existingToken);
+        const session = authStore.validateToken(existingToken);
         if (session) {
           return NextResponse.json({
             success: true,
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
       );
     } else if (action === 'check-session') {
       if (existingToken) {
-        const session = await authStore.validateToken(existingToken);
+        const session = authStore.validateToken(existingToken);
         if (session) {
           return NextResponse.json({
             success: true,
