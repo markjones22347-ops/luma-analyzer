@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Upload, FileCode, X } from 'lucide-react';
+import { Upload, FileCode, X, Archive, FileJson } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
   onCodePaste: (code: string) => void;
+  onBulkUpload?: (files: File[]) => void;
 }
 
 const styles = {
@@ -162,13 +163,41 @@ const styles = {
     cursor: 'pointer',
     marginTop: '8px',
   },
+  bulkList: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '8px',
+    marginTop: '16px',
+  },
+  bulkItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px 16px',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderRadius: '6px',
+    border: '1px solid rgba(255, 255, 255, 0.06)',
+  },
+  bulkAnalyzeButton: {
+    width: '100%',
+    padding: '14px 20px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    color: '#ffffff',
+    fontWeight: 600,
+    fontSize: '15px',
+    border: 'none',
+    cursor: 'pointer',
+    marginTop: '16px',
+  },
 };
 
-export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
+export function FileUpload({ onFileSelect, onCodePaste, onBulkUpload }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [bulkFiles, setBulkFiles] = useState<File[]>([]);
   const [codeInput, setCodeInput] = useState('');
-  const [activeTab, setActiveTab] = useState<'upload' | 'paste'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'paste' | 'bulk'>('upload');
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -184,23 +213,45 @@ export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
     e.preventDefault();
     setIsDragging(false);
 
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      const file = files[0];
-      if (file.name.endsWith('.lua') || file.name.endsWith('.txt')) {
-        setSelectedFile(file);
-        onFileSelect(file);
-      }
+    const files = Array.from(e.dataTransfer.files);
+    const luaFiles = files.filter(f => f.name.endsWith('.lua') || f.name.endsWith('.txt'));
+    
+    if (luaFiles.length === 1) {
+      setSelectedFile(luaFiles[0]);
+      onFileSelect(luaFiles[0]);
+    } else if (luaFiles.length > 1 && onBulkUpload) {
+      setBulkFiles(luaFiles);
     }
-  }, [onFileSelect]);
+  }, [onFileSelect, onBulkUpload]);
 
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      setSelectedFile(files[0]);
-      onFileSelect(files[0]);
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    const luaFiles = files.filter(f => f.name.endsWith('.lua') || f.name.endsWith('.txt'));
+    
+    if (luaFiles.length === 1) {
+      setSelectedFile(luaFiles[0]);
+      onFileSelect(luaFiles[0]);
+    } else if (luaFiles.length > 1 && onBulkUpload) {
+      setBulkFiles(luaFiles);
+      setActiveTab('bulk');
     }
-  }, [onFileSelect]);
+  }, [onFileSelect, onBulkUpload]);
+
+  const handleBulkFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    const luaFiles = files.filter(f => f.name.endsWith('.lua') || f.name.endsWith('.txt'));
+    setBulkFiles(prev => [...prev, ...luaFiles]);
+  }, []);
+
+  const removeBulkFile = useCallback((index: number) => {
+    setBulkFiles(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleBulkAnalyze = useCallback(() => {
+    if (bulkFiles.length > 0 && onBulkUpload) {
+      onBulkUpload(bulkFiles);
+    }
+  }, [bulkFiles, onBulkUpload]);
 
   const handleCodeSubmit = useCallback(() => {
     if (codeInput.trim()) {
@@ -228,6 +279,14 @@ export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
         >
           Paste Code
         </button>
+        {onBulkUpload && (
+          <button
+            onClick={() => setActiveTab('bulk')}
+            style={styles.tabButton(activeTab === 'bulk')}
+          >
+            Bulk Upload
+          </button>
+        )}
       </div>
 
       <AnimatePresence mode="wait">
@@ -281,7 +340,7 @@ export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
               </div>
             )}
           </motion.div>
-        ) : (
+        ) : activeTab === 'paste' ? (
           <motion.div
             key="paste"
             initial={{ opacity: 0 }}
@@ -309,6 +368,65 @@ export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
               >
                 Analyze Code
               </button>
+            )}
+          </motion.div>
+        ) : (
+          <motion.div
+            key="bulk"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              style={styles.dropZone(isDragging)}
+            >
+              <input
+                type="file"
+                accept=".lua,.txt"
+                multiple
+                onChange={handleBulkFileInput}
+                style={styles.fileInput}
+              />
+              <div style={styles.dropContent}>
+                <div style={styles.uploadIconBox}>
+                  <Archive style={{ width: '28px', height: '28px', color: 'rgba(255,255,255,0.5)' }} />
+                </div>
+                <h3 style={styles.dropTitle}>Drop multiple Lua files here</h3>
+                <p style={styles.dropSubtitle}>or click to select files</p>
+                <span style={styles.maxSizeBadge}>Select multiple .lua or .txt files</span>
+              </div>
+            </div>
+            
+            {bulkFiles.length > 0 && (
+              <div style={styles.bulkList}>
+                {bulkFiles.map((file, index) => (
+                  <div key={index} style={styles.bulkItem}>
+                    <FileJson style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.5)' }} />
+                    <span style={{ flex: 1, fontSize: '14px', color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {file.name}
+                    </span>
+                    <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>
+                      {(file.size / 1024).toFixed(1)} KB
+                    </span>
+                    <button
+                      onClick={() => removeBulkFile(index)}
+                      style={{ ...styles.clearButton, padding: '6px' }}
+                    >
+                      <X style={{ width: '16px', height: '16px' }} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={handleBulkAnalyze}
+                  style={styles.bulkAnalyzeButton}
+                >
+                  Analyze {bulkFiles.length} File{bulkFiles.length !== 1 ? 's' : ''}
+                </button>
+              </div>
             )}
           </motion.div>
         )}

@@ -1,6 +1,8 @@
 import { LuaAnalyzer } from '@/lib/scanner/lua-analyzer';
 import { reportStore } from '@/lib/store';
 import { rateLimiter } from '@/lib/rate-limiter';
+import { statisticsStore } from '@/lib/statistics';
+import { WebhookNotifier } from '@/lib/webhook-notifier';
 
 export async function POST(request: Request) {
   try {
@@ -29,6 +31,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const code = formData.get('code') as string | null;
+    const webhookUrl = formData.get('webhookUrl') as string | null;
 
     let scriptContent: string;
     let filename: string | undefined;
@@ -73,6 +76,26 @@ export async function POST(request: Request) {
 
     // Store report
     reportStore.set(report.id, report);
+
+    // Track statistics
+    statisticsStore.addScan(report);
+
+    // Send webhook notification if requested
+    if (webhookUrl) {
+      try {
+        // Fire and forget - don't block response
+        WebhookNotifier.sendToDiscord(webhookUrl, {
+          id: report.id,
+          riskScore: report.riskScore,
+          rating: report.rating,
+          summary: report.summary,
+          detections: report.detections,
+          fileMetadata: report.fileMetadata,
+        }).catch(console.error);
+      } catch (e) {
+        console.error('Webhook notification error:', e);
+      }
+    }
 
     return Response.json({ 
       success: true, 
