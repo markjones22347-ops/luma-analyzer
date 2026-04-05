@@ -2,35 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Users, ThumbsUp, ThumbsDown, Shield, AlertTriangle, CheckCircle, XCircle, Clock, Trash2 } from 'lucide-react';
+import { Users, ThumbsUp, ThumbsDown, Shield, AlertTriangle, CheckCircle, XCircle, Clock, Trash2, Trophy, Medal, Award, Eye } from 'lucide-react';
 import { AdminDeleteModal } from './admin-delete-modal';
+import { PostDetailModal } from './post-detail-modal';
+import { CommunitySubmission } from '@/lib/community-submissions';
 
-interface Submission {
+interface User {
   id: string;
-  scanId: string;
-  submittedBy: string;
-  userId?: string;
-  submittedAt: string;
-  status: 'pending' | 'verified' | 'rejected';
-  report: {
-    riskScore: number;
-    rating: string;
-    summary: string;
-    fileMetadata: {
-      filename?: string;
-      hash: string;
-    };
-  };
-  votes: {
-    upvotes: number;
-    downvotes: number;
-  };
-  details?: {
-    scriptName: string;
-    description: string;
-    source?: string;
-    tags?: string[];
-  };
+  username: string;
+  email: string;
+  emailVerified: boolean;
 }
 
 interface CommunityStats {
@@ -38,7 +19,12 @@ interface CommunityStats {
   pending: number;
   verified: number;
   rejected: number;
-  topContributors: Array<{ name: string; submissions: number }>;
+  topContributors: Array<{ name: string; submissions: number; userId?: string }>;
+}
+
+interface CommunitySubmissionsProps {
+  currentUser: User | null;
+  onOpenProfile: (username?: string) => void;
 }
 
 const styles = {
@@ -94,6 +80,12 @@ const styles = {
     padding: '16px',
     border: '1px solid rgba(255, 255, 255, 0.06)',
     marginBottom: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    ':hover': {
+      backgroundColor: 'rgba(255, 255, 255, 0.04)',
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
   },
   submissionHeader: {
     display: 'flex',
@@ -110,6 +102,14 @@ const styles = {
     fontSize: '12px',
     color: 'rgba(255, 255, 255, 0.5)',
     marginTop: '4px',
+    cursor: 'pointer',
+  },
+  submitterName: {
+    color: '#3b82f6',
+    cursor: 'pointer',
+    ':hover': {
+      textDecoration: 'underline',
+    },
   },
   statusBadge: (status: string) => ({
     display: 'flex',
@@ -169,7 +169,7 @@ const styles = {
     display: 'flex',
     gap: '8px',
   },
-  voteButton: (type: 'up' | 'down') => ({
+  voteButton: (isActive: boolean, type: 'up' | 'down') => ({
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
@@ -178,8 +178,12 @@ const styles = {
     fontSize: '13px',
     border: 'none',
     cursor: 'pointer',
-    backgroundColor: type === 'up' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-    color: type === 'up' ? '#22c55e' : '#ef4444',
+    backgroundColor: isActive ? 
+      (type === 'up' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)') :
+      'rgba(255, 255, 255, 0.05)',
+    color: isActive ? 
+      (type === 'up' ? '#22c55e' : '#ef4444') :
+      'rgba(255, 255, 255, 0.5)',
   }),
   deleteButton: {
     display: 'flex',
@@ -193,6 +197,18 @@ const styles = {
     fontSize: '12px',
     cursor: 'pointer',
   },
+  viewButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 12px',
+    borderRadius: '4px',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    border: '1px solid rgba(59, 130, 246, 0.2)',
+    color: '#3b82f6',
+    fontSize: '12px',
+    cursor: 'pointer',
+  },
   hash: {
     fontSize: '12px',
     color: 'rgba(255, 255, 255, 0.3)',
@@ -203,31 +219,93 @@ const styles = {
     padding: '40px',
     color: 'rgba(255, 255, 255, 0.4)',
   },
-  contributors: {
+  // Leaderboard styles
+  leaderboard: {
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderRadius: '8px',
-    padding: '16px',
+    borderRadius: '16px',
+    padding: '20px',
     border: '1px solid rgba(255, 255, 255, 0.06)',
-    marginTop: '20px',
+    marginTop: '24px',
   },
-  contributorItem: {
+  leaderboardHeader: {
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '8px 0',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+    gap: '12px',
+    marginBottom: '20px',
+    paddingBottom: '12px',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+  },
+  leaderboardTitle: {
+    fontSize: '18px',
+    fontWeight: 700,
+    color: '#ffffff',
+  },
+  leaderboardItem: (index: number) => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    padding: '12px',
+    borderRadius: '10px',
+    backgroundColor: index < 3 ? 'rgba(255, 255, 255, 0.03)' : 'transparent',
+    border: index < 3 ? '1px solid rgba(255, 255, 255, 0.08)' : 'none',
+    marginBottom: '8px',
+  }),
+  rankBadge: (index: number) => ({
+    width: '36px',
+    height: '36px',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 700,
+    fontSize: '14px',
+    backgroundColor: index === 0 ? 'rgba(251, 191, 36, 0.2)' : // Gold
+                     index === 1 ? 'rgba(148, 163, 184, 0.2)' : // Silver
+                     index === 2 ? 'rgba(251, 146, 60, 0.2)' : // Bronze
+                     'rgba(255, 255, 255, 0.05)',
+    color: index === 0 ? '#fbbf24' :
+          index === 1 ? '#94a3b8' :
+          index === 2 ? '#fb923c' :
+          'rgba(255, 255, 255, 0.6)',
+    border: `2px solid ${index === 0 ? 'rgba(251, 191, 36, 0.3)' :
+                            index === 1 ? 'rgba(148, 163, 184, 0.3)' :
+                            index === 2 ? 'rgba(251, 146, 60, 0.3)' :
+                            'transparent'}`,
+  }),
+  contributorInfo: {
+    flex: 1,
+  },
+  contributorName: {
+    fontSize: '15px',
+    fontWeight: 600,
+    color: '#ffffff',
+    cursor: 'pointer',
+    ':hover': {
+      color: '#3b82f6',
+    },
+  },
+  contributorScore: {
+    fontSize: '13px',
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  trophyIcon: {
+    width: '24px',
+    height: '24px',
+    color: '#fbbf24',
   },
 };
 
-export function CommunitySubmissions() {
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
+export function CommunitySubmissions({ currentUser, onOpenProfile }: CommunitySubmissionsProps) {
+  const [submissions, setSubmissions] = useState<CommunitySubmission[]>([]);
   const [stats, setStats] = useState<CommunityStats | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'verified' | 'rejected'>('all');
   const [loading, setLoading] = useState(true);
+  const [userVotes, setUserVotes] = useState<Record<string, 'up' | 'down'>>({});
   
-  // Admin delete modal state
+  // Modals state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<CommunitySubmission | null>(null);
 
   useEffect(() => {
     fetchSubmissions();
@@ -236,11 +314,20 @@ export function CommunitySubmissions() {
   const fetchSubmissions = async () => {
     try {
       const url = activeTab === 'all' ? '/api/community' : `/api/community?status=${activeTab}`;
-      const response = await fetch(url);
+      const response = await fetch(url, { credentials: 'include' });
       if (response.ok) {
         const data = await response.json();
         setSubmissions(data.submissions);
         setStats(data.stats);
+        
+        // Track user's votes
+        const votes: Record<string, 'up' | 'down'> = {};
+        data.submissions.forEach((sub: CommunitySubmission) => {
+          if (currentUser && sub.userVotes && sub.userVotes[currentUser.id]) {
+            votes[sub.id] = sub.userVotes[currentUser.id];
+          }
+        });
+        setUserVotes(votes);
       }
     } catch (error) {
       console.error('Failed to fetch submissions:', error);
@@ -250,13 +337,23 @@ export function CommunitySubmissions() {
   };
 
   const vote = async (id: string, type: 'up' | 'down') => {
+    if (!currentUser) return;
+    
     try {
-      const response = await fetch(`/api/community/${id}/vote`, {
-        method: 'POST',
+      const response = await fetch('/api/community', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vote: type }),
+        credentials: 'include',
+        body: JSON.stringify({ submissionId: id, vote: type }),
       });
+      
       if (response.ok) {
+        const data = await response.json();
+        // Update local state with new vote
+        setUserVotes(prev => ({
+          ...prev,
+          [id]: prev[id] === type ? undefined : type
+        }));
         fetchSubmissions();
       }
     } catch (error) {
@@ -264,13 +361,25 @@ export function CommunitySubmissions() {
     }
   };
 
-  const openDeleteModal = (submission: Submission) => {
+  const openDetailModal = (submission: CommunitySubmission) => {
+    setSelectedSubmission(submission);
+    setDetailModalOpen(true);
+  };
+
+  const openDeleteModal = (submission: CommunitySubmission, e: React.MouseEvent) => {
+    e.stopPropagation();
     setSelectedSubmission(submission);
     setDeleteModalOpen(true);
   };
 
   const handleDelete = () => {
     fetchSubmissions();
+    setDeleteModalOpen(false);
+  };
+
+  const handleProfileClick = (e: React.MouseEvent, username: string) => {
+    e.stopPropagation();
+    onOpenProfile(username);
   };
 
   const getStatusIcon = (status: string) => {
@@ -279,6 +388,13 @@ export function CommunitySubmissions() {
       case 'rejected': return <XCircle style={{ width: '14px', height: '14px' }} />;
       default: return <Clock style={{ width: '14px', height: '14px' }} />;
     }
+  };
+
+  const getRankIcon = (index: number) => {
+    if (index === 0) return <Trophy style={styles.trophyIcon} />;
+    if (index === 1) return <Medal style={{ ...styles.trophyIcon, color: '#94a3b8' }} />;
+    if (index === 2) return <Award style={{ ...styles.trophyIcon, color: '#fb923c' }} />;
+    return null;
   };
 
   if (loading) {
@@ -291,15 +407,25 @@ export function CommunitySubmissions() {
 
   return (
     <div style={styles.container}>
-      {/* Admin Delete Modal */}
+      {/* Modals */}
       {selectedSubmission && (
-        <AdminDeleteModal
-          isOpen={deleteModalOpen}
-          onClose={() => setDeleteModalOpen(false)}
-          submissionId={selectedSubmission.id}
-          submissionName={selectedSubmission.details?.scriptName || selectedSubmission.report.fileMetadata.filename || 'Unknown'}
-          onDelete={handleDelete}
-        />
+        <>
+          <AdminDeleteModal
+            isOpen={deleteModalOpen}
+            onClose={() => setDeleteModalOpen(false)}
+            submissionId={selectedSubmission.id}
+            submissionName={selectedSubmission.details?.scriptName || 'Unknown'}
+            onDelete={handleDelete}
+          />
+          <PostDetailModal
+            submission={selectedSubmission}
+            isOpen={detailModalOpen}
+            onClose={() => setDetailModalOpen(false)}
+            currentUserId={currentUser?.id}
+            userVote={selectedSubmission.id ? userVotes[selectedSubmission.id] : null}
+            onVote={vote}
+          />
+        </>
       )}
 
       <div style={styles.header}>
@@ -348,19 +474,28 @@ export function CommunitySubmissions() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             style={styles.submissionCard}
+            onClick={() => openDetailModal(sub)}
           >
             <div style={styles.submissionHeader}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <span style={styles.submissionTitle}>
-                    {sub.details?.scriptName || sub.report.fileMetadata.filename || 'Unknown Script'}
+                    {sub.details?.scriptName || 'Untitled Script'}
                   </span>
                   <span style={styles.riskScore(sub.report.riskScore)}>
                     {sub.report.riskScore}/100
                   </span>
                 </div>
                 <div style={styles.submissionMeta}>
-                  Submitted by {sub.submittedBy} • {new Date(sub.submittedAt).toLocaleDateString()}
+                  Submitted by{' '}
+                  <span 
+                    style={styles.submitterName}
+                    onClick={(e) => handleProfileClick(e, sub.submittedBy)}
+                  >
+                    {sub.submittedBy}
+                  </span>
+                  {' • '}
+                  {new Date(sub.submittedAt).toLocaleDateString()}
                 </div>
               </div>
               <span style={styles.statusBadge(sub.status)}>
@@ -388,44 +523,71 @@ export function CommunitySubmissions() {
             <div style={styles.actions}>
               <div style={styles.voteButtons}>
                 <button
-                  onClick={() => vote(sub.id, 'up')}
-                  style={styles.voteButton('up')}
+                  onClick={(e) => { e.stopPropagation(); vote(sub.id, 'up'); }}
+                  style={styles.voteButton(userVotes[sub.id] === 'up', 'up')}
+                  disabled={!currentUser}
                 >
                   <ThumbsUp style={{ width: '14px', height: '14px' }} />
                   {sub.votes.upvotes}
                 </button>
                 <button
-                  onClick={() => vote(sub.id, 'down')}
-                  style={styles.voteButton('down')}
+                  onClick={(e) => { e.stopPropagation(); vote(sub.id, 'down'); }}
+                  style={styles.voteButton(userVotes[sub.id] === 'down', 'down')}
+                  disabled={!currentUser}
                 >
                   <ThumbsDown style={{ width: '14px', height: '14px' }} />
                   {sub.votes.downvotes}
                 </button>
               </div>
 
-              <button
-                onClick={() => openDeleteModal(sub)}
-                style={styles.deleteButton}
-              >
-                <Trash2 style={{ width: '14px', height: '14px' }} />
-                Delete
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); openDetailModal(sub); }}
+                  style={styles.viewButton}
+                >
+                  <Eye style={{ width: '14px', height: '14px' }} />
+                  View
+                </button>
+                <button
+                  onClick={(e) => openDeleteModal(sub, e)}
+                  style={styles.deleteButton}
+                >
+                  <Trash2 style={{ width: '14px', height: '14px' }} />
+                  Delete
+                </button>
+              </div>
             </div>
           </motion.div>
         ))
       )}
 
+      {/* Leaderboard */}
       {stats && stats.topContributors.length > 0 && (
-        <div style={styles.contributors}>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#ffffff', marginBottom: '12px' }}>
-            Top Contributors
-          </h3>
+        <div style={styles.leaderboard}>
+          <div style={styles.leaderboardHeader}>
+            <Trophy style={{ width: '24px', height: '24px', color: '#fbbf24' }} />
+            <h3 style={styles.leaderboardTitle}>Top Contributors</h3>
+          </div>
           {stats.topContributors.map((contributor, index) => (
-            <div key={index} style={styles.contributorItem}>
-              <span style={{ fontSize: '13px', color: '#ffffff' }}>{contributor.name}</span>
-              <span style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.5)' }}>
-                {contributor.submissions} submissions
-              </span>
+            <div 
+              key={index} 
+              style={styles.leaderboardItem(index)}
+              onClick={() => onOpenProfile(contributor.name)}
+            >
+              <div style={styles.rankBadge(index)}>
+                {index < 3 ? getRankIcon(index) : index + 1}
+              </div>
+              <div style={styles.contributorInfo}>
+                <div style={styles.contributorName}>{contributor.name}</div>
+                <div style={styles.contributorScore}>
+                  {contributor.submissions} submission{contributor.submissions !== 1 ? 's' : ''}
+                </div>
+              </div>
+              {index < 3 && (
+                <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.4)' }}>
+                  #{index + 1}
+                </div>
+              )}
             </div>
           ))}
         </div>

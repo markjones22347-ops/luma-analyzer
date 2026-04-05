@@ -14,16 +14,15 @@ const COOKIE_OPTIONS = {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { action, username, email, password, code } = body;
+    const { action, username, email, password, code, bio } = body;
 
     // Get existing session from cookie
     const cookieHeader = request.headers.get('cookie');
     const existingToken = cookieHeader?.match(/luma_session=([^;]+)/)?.[1];
 
     if (action === 'register') {
-      const result = authStore.register(username, email, password);
+      const result = await authStore.register(username, email, password);
       if (result.success) {
-        // Send actual verification email via Gmail
         const emailResult = await sendVerificationEmail(
           email,
           username,
@@ -49,12 +48,11 @@ export async function POST(request: Request) {
         );
       }
     } else if (action === 'verify-email') {
-      const result = authStore.verifyEmail(username, code);
+      const result = await authStore.verifyEmail(username, code);
       if (result.success) {
-        // Auto-login after verification
-        const user = authStore.getUserByUsername(username);
+        const user = await authStore.getUserByUsername(username);
         if (user) {
-          const loginResult = authStore.login(username, user.passwordHash);
+          const loginResult = await authStore.login(username, user.passwordHash);
           if (loginResult.success) {
             const response = NextResponse.json({
               success: true,
@@ -71,11 +69,10 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     } else if (action === 'resend-verification') {
-      const result = authStore.resendVerification(username);
+      const result = await authStore.resendVerification(username);
       if (result.success) {
-        const user = authStore.getUserByUsername(username);
+        const user = await authStore.getUserByUsername(username);
         if (user) {
-          // Send new verification email
           const emailResult = await sendVerificationEmail(
             user.email,
             username,
@@ -101,7 +98,7 @@ export async function POST(request: Request) {
         );
       }
     } else if (action === 'login') {
-      const result = authStore.login(username, password);
+      const result = await authStore.login(username, password);
       if (result.success) {
         const response = NextResponse.json({
           success: true,
@@ -110,7 +107,6 @@ export async function POST(request: Request) {
         response.cookies.set(COOKIE_NAME, result.session!.token, COOKIE_OPTIONS);
         return response;
       } else {
-        // Check if needs verification
         if (result.needsVerification) {
           return NextResponse.json({
             success: false,
@@ -126,14 +122,14 @@ export async function POST(request: Request) {
       }
     } else if (action === 'logout') {
       if (existingToken) {
-        authStore.logout(existingToken);
+        await authStore.logout(existingToken);
       }
       const response = NextResponse.json({ success: true });
       response.cookies.delete(COOKIE_NAME);
       return response;
     } else if (action === 'verify') {
       if (existingToken) {
-        const session = authStore.validateToken(existingToken);
+        const session = await authStore.validateToken(existingToken);
         if (session) {
           return NextResponse.json({
             success: true,
@@ -147,7 +143,7 @@ export async function POST(request: Request) {
       );
     } else if (action === 'check-session') {
       if (existingToken) {
-        const session = authStore.validateToken(existingToken);
+        const session = await authStore.validateToken(existingToken);
         if (session) {
           return NextResponse.json({
             success: true,
@@ -156,6 +152,19 @@ export async function POST(request: Request) {
         }
       }
       return NextResponse.json({ success: false });
+    } else if (action === 'update-bio') {
+      if (existingToken) {
+        const session = await authStore.validateToken(existingToken);
+        if (session) {
+          const result = await authStore.updateUser(session.userId, { bio });
+          if (result.success) {
+            return NextResponse.json({ success: true });
+          } else {
+            return NextResponse.json({ success: false, error: result.error }, { status: 400 });
+          }
+        }
+      }
+      return NextResponse.json({ success: false, error: 'Not authenticated' }, { status: 401 });
     }
 
     return NextResponse.json(

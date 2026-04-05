@@ -4,21 +4,29 @@ import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileUpload } from '@/components/file-upload';
 import { ScanResults } from '@/components/scan-results';
-import { StatisticsDashboard } from '@/components/statistics-dashboard';
 import { CommunitySubmissions } from '@/components/community-submissions';
 import { AuthModal } from '@/components/auth-modal';
 import { SubmissionModal } from '@/components/submission-modal';
+import { ProfileModal } from '@/components/profile-modal';
+import { CustomModal, useModal } from '@/components/custom-modal';
 import { ScanningAnimation } from '@/components/scanning-animation';
 import { ScanReport } from '@/types';
-import { Shield, Github, BarChart3, Users, User, LogOut } from 'lucide-react';
+import { Shield, Github, Users, User, LogOut, Trophy } from 'lucide-react';
 
-type ViewMode = 'scan' | 'stats' | 'community';
+type ViewMode = 'scan' | 'community';
 
 interface User {
   id: string;
   username: string;
   email: string;
   emailVerified: boolean;
+  bio?: string;
+  stats?: {
+    scansPerformed: number;
+    scriptsSubmitted: number;
+    totalUpvotes: number;
+    joinedAt: string;
+  };
 }
 
 const styles = {
@@ -99,6 +107,11 @@ const styles = {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     fontSize: '13px',
     color: 'rgba(255, 255, 255, 0.8)',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    ':hover': {
+      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    },
   },
   githubLink: {
     display: 'flex',
@@ -233,12 +246,17 @@ export default function Home() {
   // Auth state
   const [user, setUser] = useState<User | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [profileUser, setProfileUser] = useState<User | null>(null);
   
   // Submission modal state
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
   const [submissionReport, setSubmissionReport] = useState<ScanReport | null>(null);
 
-  // Check for existing session on load (server-side cookies)
+  // Custom modal hook
+  const { state: modalState, closeModal: closeCustomModal, success, error: showError } = useModal();
+
+  // Check for existing session on load
   useEffect(() => {
     checkSession();
   }, []);
@@ -262,6 +280,7 @@ export default function Home() {
 
   const handleAuth = (userData: User) => {
     setUser(userData);
+    success(`Welcome, ${userData.username}!`);
   };
 
   const handleLogout = async () => {
@@ -271,6 +290,45 @@ export default function Home() {
       body: JSON.stringify({ action: 'logout' }),
     });
     setUser(null);
+    success('Logged out successfully');
+  };
+
+  const openProfile = async (username?: string) => {
+    try {
+      const url = username ? `/api/profile?username=${username}` : '/api/profile';
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.success) {
+        setProfileUser(data.user);
+        setProfileModalOpen(true);
+      }
+    } catch (error) {
+      showError('Failed to load profile');
+    }
+  };
+
+  const handleUpdateBio = async (bio: string) => {
+    if (!user) return;
+    
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update-bio', bio }),
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        setUser({ ...user, bio });
+        setProfileUser(profileUser ? { ...profileUser, bio } : null);
+        success('Bio updated successfully');
+      } else {
+        showError(data.error || 'Failed to update bio');
+      }
+    } catch (error) {
+      showError('Failed to update bio');
+    }
   };
 
   const handleFileSelect = useCallback(async (file: File) => {
@@ -294,12 +352,21 @@ export default function Home() {
 
       const data = await response.json();
       setReport(data.report);
+      
+      // Increment scan stat if user is logged in
+      if (user) {
+        await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'increment-scan' }),
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsScanning(false);
     }
-  }, []);
+  }, [user]);
 
   const handleCodePaste = useCallback(async (code: string) => {
     setIsScanning(true);
@@ -390,14 +457,54 @@ export default function Home() {
     setSubmissionModalOpen(true);
   };
 
+  const handleSubmitToCommunity = async (details: { scriptName: string; description: string; source?: string; tags: string[] }) => {
+    if (!submissionReport || !user) return;
+    
+    try {
+      const response = await fetch('/api/community', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          report: submissionReport,
+          details,
+        }),
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        success('Script submitted to community successfully!');
+        setSubmissionModalOpen(false);
+        setSubmissionReport(null);
+      } else {
+        showError(data.error || 'Failed to submit');
+      }
+    } catch (error) {
+      showError('Failed to submit to community');
+    }
+  };
+
   return (
     <main style={styles.main}>
+      {/* Custom Modal */}
+      <CustomModal state={modalState} onClose={closeCustomModal} />
+      
       {/* Auth Modal */}
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         onAuth={handleAuth}
       />
+
+      {/* Profile Modal */}
+      {profileUser && (
+        <ProfileModal
+          isOpen={profileModalOpen}
+          onClose={() => setProfileModalOpen(false)}
+          user={profileUser}
+          isOwnProfile={user?.id === profileUser.id}
+          onUpdateBio={handleUpdateBio}
+        />
+      )}
 
       {/* Submission Modal */}
       {submissionReport && (
@@ -406,9 +513,7 @@ export default function Home() {
           onClose={() => setSubmissionModalOpen(false)}
           report={submissionReport}
           user={user}
-          onSubmit={() => {
-            alert('Submitted to community successfully!');
-          }}
+          onSubmit={handleSubmitToCommunity}
         />
       )}
 
@@ -431,13 +536,6 @@ export default function Home() {
               <span>Scan</span>
             </button>
             <button
-              onClick={() => setViewMode('stats')}
-              style={styles.navButton(viewMode === 'stats')}
-            >
-              <BarChart3 style={{ width: '14px', height: '14px' }} />
-              <span>Statistics</span>
-            </button>
-            <button
               onClick={() => setViewMode('community')}
               style={styles.navButton(viewMode === 'community')}
             >
@@ -449,7 +547,10 @@ export default function Home() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {user ? (
               <>
-                <div style={styles.userDisplay}>
+                <div 
+                  style={styles.userDisplay}
+                  onClick={() => openProfile()}
+                >
                   <User style={{ width: '14px', height: '14px' }} />
                   <span>{user.username}</span>
                 </div>
@@ -519,7 +620,6 @@ export default function Home() {
                       onSubmitToCommunity={openSubmissionModal}
                     />
                     
-                    {/* Show login prompt if not logged in and score is high enough */}
                     {!user && report.riskScore >= 41 && (
                       <div style={styles.loginPrompt}>
                         <p>Sign in to submit this script to the community database</p>
@@ -619,19 +719,12 @@ export default function Home() {
         </>
       )}
 
-      {viewMode === 'stats' && (
-        <div style={styles.mainArea}>
-          <div style={styles.card}>
-            <StatisticsDashboard />
-          </div>
-        </div>
-      )}
-
       {viewMode === 'community' && (
         <div style={styles.mainArea}>
-          <div style={styles.card}>
-            <CommunitySubmissions />
-          </div>
+          <CommunitySubmissions 
+            currentUser={user}
+            onOpenProfile={openProfile}
+          />
         </div>
       )}
 
