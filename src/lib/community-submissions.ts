@@ -268,7 +268,7 @@ class CommunitySubmissionsStore {
         submission.status = 'verified';
       }
 
-      return { success: true, submission };
+      return { success: true, submission: submission || undefined };
     } catch (error) {
       console.error('[CommunityStore] Vote error:', error);
       return { success: false, error: 'Vote failed' };
@@ -305,7 +305,7 @@ class CommunitySubmissionsStore {
       if (error) throw error;
 
       const submission = await this.getSubmissionById(submissionId);
-      return { success: true, submission };
+      return { success: true, submission: submission || undefined };
     } catch (error) {
       console.error('[CommunityStore] Moderate error:', error);
       return { success: false, error: 'Moderation failed' };
