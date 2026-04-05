@@ -1,12 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ScanReport } from '@/types';
-import { AlertTriangle, CheckCircle, XCircle, FileText, Globe, Lock, Download, Shield, Code } from 'lucide-react';
+import { AlertTriangle, CheckCircle, XCircle, FileText, Globe, Lock, Download, Shield, Code, Users, Check } from 'lucide-react';
 
 interface ScanResultsProps {
   report: ScanReport;
   onDownload: () => void;
+  onSubmitToCommunity?: (report: ScanReport) => void;
 }
 
 const severityColors: Record<string, { text: string; bg: string; border: string }> = {
@@ -23,12 +25,12 @@ const styles = {
     flexDirection: 'column' as const,
     gap: '16px',
   },
-  headerCard: (glowColor: string) => ({
+  headerCard: {
     backgroundColor: 'rgba(255,255,255,0.02)',
     borderRadius: '12px',
     padding: '32px',
     border: '1px solid rgba(255,255,255,0.06)',
-  }),
+  },
   headerContent: {
     display: 'flex',
     flexDirection: 'column' as const,
@@ -70,6 +72,12 @@ const styles = {
     maxWidth: '500px',
     lineHeight: 1.5,
   },
+  actionButtons: {
+    display: 'flex',
+    gap: '12px',
+    flexWrap: 'wrap' as const,
+    justifyContent: 'center' as const,
+  },
   downloadButton: {
     display: 'flex',
     alignItems: 'center',
@@ -82,7 +90,31 @@ const styles = {
     cursor: 'pointer',
     fontSize: '14px',
     fontWeight: 500,
-    transition: 'all 0.2s',
+  },
+  submitButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 20px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    border: '1px solid rgba(59, 130, 246, 0.3)',
+    color: '#3b82f6',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 600,
+  },
+  submittedBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '10px 20px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    border: '1px solid rgba(34, 197, 94, 0.3)',
+    color: '#22c55e',
+    fontSize: '14px',
+    fontWeight: 600,
   },
   section: {
     backgroundColor: 'rgba(255,255,255,0.02)',
@@ -179,14 +211,28 @@ const styles = {
     lineHeight: '1.6',
     color: 'rgba(255,255,255,0.7)',
   },
+  notEligibleBox: {
+    padding: '12px 16px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: '13px',
+    textAlign: 'center' as const,
+  },
 };
 
-export function ScanResults({ report, onDownload }: ScanResultsProps) {
+export function ScanResults({ report, onDownload, onSubmitToCommunity }: ScanResultsProps) {
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
   const getRatingColor = (rating: string) => {
     switch (rating) {
       case 'SAFE': return '#4ade80';
-      case 'CAUTION': return '#fbbf24';
-      case 'FLAGGED': return '#ef4444';
+      case 'LOW RISK': return '#f59e0b';
+      case 'MODERATE RISK': return '#f97316';
+      case 'HIGH RISK': return '#ef4444';
+      case 'CRITICAL': return '#dc2626';
       default: return '#ffffff';
     }
   };
@@ -197,14 +243,35 @@ export function ScanResults({ report, onDownload }: ScanResultsProps) {
     switch (rating) {
       case 'SAFE':
         return <CheckCircle style={{ width: size, height: size, color }} />;
-      case 'CAUTION':
+      case 'LOW RISK':
         return <AlertTriangle style={{ width: size, height: size, color }} />;
-      case 'FLAGGED':
+      case 'MODERATE RISK':
+        return <AlertTriangle style={{ width: size, height: size, color }} />;
+      case 'HIGH RISK':
+        return <XCircle style={{ width: size, height: size, color }} />;
+      case 'CRITICAL':
         return <XCircle style={{ width: size, height: size, color }} />;
     }
   };
 
   const ratingColor = getRatingColor(report.rating);
+
+  // Only allow submission for MODERATE+ risk (41+)
+  const canSubmitToCommunity = report.riskScore >= 41;
+
+  const handleSubmit = async () => {
+    if (!onSubmitToCommunity || !canSubmitToCommunity) return;
+    
+    setSubmitting(true);
+    try {
+      await onSubmitToCommunity(report);
+      setSubmitted(true);
+    } catch (error) {
+      console.error('Failed to submit:', error);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <motion.div
@@ -214,7 +281,7 @@ export function ScanResults({ report, onDownload }: ScanResultsProps) {
       style={styles.container}
     >
       {/* Header Card */}
-      <div style={styles.headerCard(ratingColor)}>
+      <div style={styles.headerCard}>
         <div style={styles.headerContent}>
           {/* Score Circle */}
           <div style={styles.scoreCircle}>
@@ -252,22 +319,61 @@ export function ScanResults({ report, onDownload }: ScanResultsProps) {
           {/* Summary */}
           <p style={styles.summary}>{report.summary}</p>
 
-          {/* Download Button */}
-          <button
-            onClick={onDownload}
-            style={styles.downloadButton}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)';
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-            }}
-          >
-            <Download style={{ width: '16px', height: '16px' }} />
-            <span>Download Report</span>
-          </button>
+          {/* Action Buttons */}
+          <div style={styles.actionButtons}>
+            <button
+              onClick={onDownload}
+              style={styles.downloadButton}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+              }}
+            >
+              <Download style={{ width: '16px', height: '16px' }} />
+              <span>Download Report</span>
+            </button>
+
+            {/* Community Submit Button */}
+            {onSubmitToCommunity && (
+              <>
+                {submitted ? (
+                  <div style={styles.submittedBadge}>
+                    <Check style={{ width: '16px', height: '16px' }} />
+                    <span>Submitted to Community</span>
+                  </div>
+                ) : canSubmitToCommunity ? (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={submitting}
+                    style={{
+                      ...styles.submitButton,
+                      opacity: submitting ? 0.6 : 1,
+                      cursor: submitting ? 'not-allowed' : 'pointer',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!submitting) {
+                        e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.25)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.15)';
+                    }}
+                  >
+                    <Users style={{ width: '16px', height: '16px' }} />
+                    <span>{submitting ? 'Submitting...' : 'Submit to Community'}</span>
+                  </button>
+                ) : (
+                  <div style={styles.notEligibleBox}>
+                    Safe scripts cannot be submitted to community database
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
