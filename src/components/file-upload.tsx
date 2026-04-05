@@ -9,6 +9,171 @@ interface FileUploadProps {
   onCodePaste: (code: string) => void;
 }
 
+const styles = {
+  container: {
+    width: '100%',
+  },
+  tabContainer: {
+    display: 'flex',
+    gap: '8px',
+    marginBottom: '24px',
+    padding: '6px',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: '20px',
+    border: '1px solid rgba(255, 255, 255, 0.06)',
+  },
+  tabButton: (isActive: boolean) => ({
+    flex: 1,
+    padding: '14px 28px',
+    borderRadius: '14px',
+    fontWeight: 600,
+    fontSize: '15px',
+    border: 'none',
+    cursor: 'pointer',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    backgroundColor: isActive ? '#3b82f6' : 'transparent',
+    color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
+    boxShadow: isActive ? '0 8px 25px -5px rgba(59, 130, 246, 0.4)' : 'none',
+  }),
+  glassCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    backdropFilter: 'blur(20px)',
+    borderRadius: '28px',
+    padding: '32px',
+    border: '1px solid rgba(255, 255, 255, 0.06)',
+  },
+  fileInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '20px',
+  },
+  fileIconBox: {
+    width: '72px',
+    height: '72px',
+    borderRadius: '20px',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '1px solid rgba(34, 197, 94, 0.2)',
+  },
+  fileName: {
+    fontSize: '18px',
+    fontWeight: 600,
+    color: '#ffffff',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  fileSize: {
+    fontSize: '14px',
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginTop: '4px',
+  },
+  clearButton: {
+    padding: '14px',
+    borderRadius: '14px',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    color: '#ef4444',
+    border: '1px solid rgba(239, 68, 68, 0.2)',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropZone: (isDragging: boolean) => ({
+    position: 'relative' as const,
+    borderRadius: '28px',
+    border: `2px dashed ${isDragging ? '#3b82f6' : 'rgba(255, 255, 255, 0.15)'}`,
+    backgroundColor: isDragging ? 'rgba(59, 130, 246, 0.05)' : 'transparent',
+    transition: 'all 0.3s ease',
+    overflow: 'hidden',
+  }),
+  fileInput: {
+    position: 'absolute' as const,
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 0,
+    cursor: 'pointer',
+    zIndex: 10,
+  },
+  dropContent: {
+    padding: '60px 48px',
+    textAlign: 'center' as const,
+  },
+  uploadIconBox: {
+    width: '100px',
+    height: '100px',
+    margin: '0 auto 28px',
+    borderRadius: '28px',
+    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2))',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '1px solid rgba(59, 130, 246, 0.2)',
+  },
+  dropTitle: {
+    fontSize: '22px',
+    fontWeight: 600,
+    color: '#ffffff',
+    marginBottom: '10px',
+  },
+  dropSubtitle: {
+    fontSize: '15px',
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginBottom: '20px',
+  },
+  maxSizeBadge: {
+    display: 'inline-block',
+    padding: '10px 20px',
+    borderRadius: '9999px',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    fontSize: '14px',
+    color: 'rgba(255, 255, 255, 0.6)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+  },
+  textarea: {
+    width: '100%',
+    height: '320px',
+    padding: '28px',
+    borderRadius: '24px',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    color: '#ffffff',
+    fontFamily: 'monospace',
+    fontSize: '14px',
+    resize: 'none' as const,
+    outline: 'none',
+    lineHeight: 1.6,
+  },
+  textareaWrapper: {
+    position: 'relative' as const,
+  },
+  charCount: {
+    position: 'absolute' as const,
+    bottom: '20px',
+    right: '20px',
+    fontSize: '13px',
+    color: 'rgba(255, 255, 255, 0.4)',
+  },
+  analyzeButton: {
+    width: '100%',
+    padding: '18px 32px',
+    borderRadius: '18px',
+    background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+    color: '#ffffff',
+    fontWeight: 700,
+    fontSize: '16px',
+    border: 'none',
+    cursor: 'pointer',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    boxShadow: '0 10px 30px -5px rgba(59, 130, 246, 0.4)',
+    marginTop: '8px',
+  },
+};
+
 export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -58,26 +223,42 @@ export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
   }, []);
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 p-1 bg-luma-card rounded-2xl border border-luma-border">
+    <div style={styles.container}>
+      {/* Custom Rounded Tab Buttons */}
+      <div style={styles.tabContainer}>
         <button
           onClick={() => setActiveTab('upload')}
-          className={`flex-1 py-3 px-6 rounded-xl font-medium transition-all duration-300 ${
-            activeTab === 'upload'
-              ? 'bg-luma-primary text-white shadow-lg shadow-luma-primary/25'
-              : 'text-luma-muted hover:text-white'
-          }`}
+          style={styles.tabButton(activeTab === 'upload')}
+          onMouseEnter={(e) => {
+            if (activeTab !== 'upload') {
+              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)';
+              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeTab !== 'upload') {
+              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.5)';
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }
+          }}
         >
           Upload File
         </button>
         <button
           onClick={() => setActiveTab('paste')}
-          className={`flex-1 py-3 px-6 rounded-xl font-medium transition-all duration-300 ${
-            activeTab === 'paste'
-              ? 'bg-luma-primary text-white shadow-lg shadow-luma-primary/25'
-              : 'text-luma-muted hover:text-white'
-          }`}
+          style={styles.tabButton(activeTab === 'paste')}
+          onMouseEnter={(e) => {
+            if (activeTab !== 'paste') {
+              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)';
+              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeTab !== 'paste') {
+              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.5)';
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }
+          }}
         >
           Paste Code
         </button>
@@ -94,27 +275,35 @@ export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
           >
             {selectedFile ? (
               <motion.div
-                initial={{ scale: 0.95 }}
-                animate={{ scale: 1 }}
-                className="glass rounded-3xl p-8 border border-luma-border glow-safe"
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                style={styles.glassCard}
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-luma-safe/10 flex items-center justify-center">
-                    <FileCode className="w-8 h-8 text-luma-safe" />
+                <div style={styles.fileInfo}>
+                  <div style={styles.fileIconBox}>
+                    <FileCode style={{ width: '36px', height: '36px', color: '#22c55e' }} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-white truncate">
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3 style={styles.fileName}>
                       {selectedFile.name}
                     </h3>
-                    <p className="text-luma-muted text-sm">
-                      {(selectedFile.size / 1024).toFixed(1)} KB
+                    <p style={styles.fileSize}>
+                      {(selectedFile.size / 1024).toFixed(1)} KB • Ready to analyze
                     </p>
                   </div>
                   <button
                     onClick={clearFile}
-                    className="p-3 rounded-xl bg-luma-danger/10 text-luma-danger hover:bg-luma-danger/20 transition-colors"
+                    style={styles.clearButton}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
                   >
-                    <X className="w-5 h-5" />
+                    <X style={{ width: '22px', height: '22px' }} />
                   </button>
                 </div>
               </motion.div>
@@ -123,33 +312,30 @@ export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
-                className={`relative rounded-3xl border-2 border-dashed transition-all duration-300 overflow-hidden ${
-                  isDragging
-                    ? 'border-luma-primary bg-luma-primary/5'
-                    : 'border-luma-border hover:border-luma-primary/50'
-                }`}
+                style={styles.dropZone(isDragging)}
               >
                 <input
                   type="file"
                   accept=".lua,.txt"
                   onChange={handleFileInput}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  style={styles.fileInput}
                 />
-                <div className="p-12 text-center">
+                <div style={styles.dropContent}>
                   <motion.div
-                    animate={isDragging ? { scale: 1.1 } : { scale: 1 }}
-                    className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-luma-primary/20 to-luma-accent/20 flex items-center justify-center"
+                    animate={isDragging ? { scale: 1.1, rotate: 5 } : { scale: 1, rotate: 0 }}
+                    transition={{ type: 'spring', stiffness: 300 }}
+                    style={styles.uploadIconBox}
                   >
-                    <Upload className="w-12 h-12 text-luma-primary" />
+                    <Upload style={{ width: '44px', height: '44px', color: '#3b82f6' }} />
                   </motion.div>
-                  <h3 className="text-xl font-semibold text-white mb-2">
+                  <h3 style={styles.dropTitle}>
                     Drop your Lua file here
                   </h3>
-                  <p className="text-luma-muted mb-4">
-                    or click to browse (.lua or .txt)
+                  <p style={styles.dropSubtitle}>
+                    or click anywhere to browse files
                   </p>
-                  <span className="inline-block px-4 py-2 rounded-full bg-luma-card text-sm text-luma-muted border border-luma-border">
-                    Maximum file size: 5MB
+                  <span style={styles.maxSizeBadge}>
+                    Supports .lua and .txt up to 5MB
                   </span>
                 </div>
               </div>
@@ -162,18 +348,26 @@ export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3 }}
-            className="space-y-4"
+            style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
           >
-            <div className="relative">
+            <div style={styles.textareaWrapper}>
               <textarea
                 value={codeInput}
                 onChange={(e) => setCodeInput(e.target.value)}
-                placeholder="Paste your Lua code here..."
-                className="w-full h-80 p-6 rounded-3xl bg-luma-card border border-luma-border text-white placeholder-luma-muted resize-none focus:outline-none focus:border-luma-primary focus:ring-2 focus:ring-luma-primary/20 transition-all font-mono text-sm"
+                placeholder="Paste your Lua code here for instant analysis..."
+                style={styles.textarea}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
+                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
                 spellCheck={false}
               />
-              <div className="absolute bottom-4 right-4 text-luma-muted text-sm">
-                {codeInput.length} characters
+              <div style={styles.charCount}>
+                {codeInput.length.toLocaleString()} chars
               </div>
             </div>
             {codeInput.trim() && (
@@ -181,9 +375,17 @@ export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 onClick={handleCodeSubmit}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-luma-primary to-luma-accent text-white font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-luma-primary/25"
+                style={styles.analyzeButton}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 15px 35px -5px rgba(59, 130, 246, 0.5)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 10px 30px -5px rgba(59, 130, 246, 0.4)';
+                }}
               >
-                Analyze Code
+                Start Analysis
               </motion.button>
             )}
           </motion.div>

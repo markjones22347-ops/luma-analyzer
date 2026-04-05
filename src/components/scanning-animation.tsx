@@ -1,96 +1,176 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Shield, Zap, Lock, Eye } from 'lucide-react';
+import { Shield, Scan } from 'lucide-react';
+
+const styles = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '80px 24px',
+    minHeight: '400px',
+  },
+  ringsContainer: {
+    position: 'relative' as const,
+    width: '220px',
+    height: '220px',
+    marginBottom: '40px',
+  },
+  centerIcon: {
+    position: 'absolute' as const,
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: '90px',
+    height: '90px',
+    borderRadius: '24px',
+    background: 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(139,92,246,0.3))',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 0 50px rgba(59,130,246,0.4)',
+    border: '1px solid rgba(255,255,255,0.1)',
+  },
+  ring: (size: number, color: string) => ({
+    position: 'absolute' as const,
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: `${size}px`,
+    height: `${size}px`,
+    borderRadius: '50%',
+    border: `2px solid ${color}`,
+    opacity: 0.3,
+  }),
+  statusText: {
+    fontSize: '24px',
+    fontWeight: 700,
+    color: '#ffffff',
+    marginBottom: '10px',
+    textAlign: 'center' as const,
+  },
+  subText: {
+    fontSize: '15px',
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center' as const,
+  },
+  progressBar: {
+    width: '280px',
+    height: '6px',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: '3px',
+    marginTop: '32px',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+    borderRadius: '3px',
+  },
+  scanningLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginTop: '16px',
+    fontSize: '13px',
+    color: 'rgba(255,255,255,0.4)',
+  },
+};
 
 export function ScanningAnimation() {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col items-center justify-center py-20"
-    >
-      {/* Animated Icon */}
-      <div className="relative w-32 h-32 mb-8">
-        {/* Outer ring */}
+    <div style={styles.container}>
+      <div style={styles.ringsContainer}>
+        {/* Animated rings */}
         <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-          className="absolute inset-0 rounded-full border-2 border-dashed border-luma-primary/30"
+          style={styles.ring(220, 'rgba(59,130,246,0.5)')}
+          animate={{
+            scale: [1, 1.15, 1],
+            opacity: [0.3, 0.6, 0.3],
+            rotate: [0, 180, 360],
+          }}
+          transition={{
+            duration: 3,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
         />
-        
-        {/* Middle ring */}
         <motion.div
-          animate={{ rotate: -360 }}
-          transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-          className="absolute inset-3 rounded-full border-2 border-dashed border-luma-accent/30"
+          style={styles.ring(180, 'rgba(139,92,246,0.5)')}
+          animate={{
+            scale: [1, 1.25, 1],
+            opacity: [0.2, 0.5, 0.2],
+            rotate: [0, -180, -360],
+          }}
+          transition={{
+            duration: 3,
+            repeat: Infinity,
+            ease: 'easeInOut',
+            delay: 0.5,
+          }}
         />
-        
+        <motion.div
+          style={styles.ring(140, 'rgba(59,130,246,0.5)')}
+          animate={{
+            scale: [1, 1.35, 1],
+            opacity: [0.2, 0.4, 0.2],
+          }}
+          transition={{
+            duration: 3,
+            repeat: Infinity,
+            ease: 'easeInOut',
+            delay: 1,
+          }}
+        />
+
         {/* Center icon */}
         <motion.div
-          animate={{ scale: [1, 1.1, 1] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="absolute inset-6 rounded-3xl bg-gradient-to-br from-luma-primary/20 to-luma-accent/20 flex items-center justify-center"
+          style={styles.centerIcon}
+          animate={{
+            scale: [1, 1.08, 1],
+            rotate: [0, 5, -5, 0],
+          }}
+          transition={{
+            duration: 2,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
         >
-          <Shield className="w-10 h-10 text-luma-primary" />
+          <Shield style={{ width: '44px', height: '44px', color: '#ffffff' }} />
         </motion.div>
-
-        {/* Pulse effect */}
-        <motion.div
-          animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="absolute inset-0 rounded-full bg-luma-primary/10"
-        />
       </div>
 
-      {/* Text */}
-      <motion.h3
-        animate={{ opacity: [0.5, 1, 0.5] }}
-        transition={{ duration: 2, repeat: Infinity }}
-        className="text-xl font-semibold text-white mb-4"
+      <motion.h2
+        style={styles.statusText}
+        animate={{ opacity: [1, 0.6, 1] }}
+        transition={{ duration: 1.5, repeat: Infinity }}
       >
-        Analyzing script...
-      </motion.h3>
+        Scanning Script...
+      </motion.h2>
+      <p style={styles.subText}>
+        Analyzing behavioral patterns and security risks
+      </p>
 
       {/* Progress bar */}
-      <div className="w-64 h-2 bg-luma-card rounded-full overflow-hidden">
+      <div style={styles.progressBar}>
         <motion.div
-          animate={{ x: ["-100%", "100%"] }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-          className="w-1/2 h-full bg-gradient-to-r from-luma-primary to-luma-accent rounded-full"
+          style={styles.progressFill}
+          initial={{ width: '0%' }}
+          animate={{ width: ['0%', '100%', '0%'] }}
+          transition={{
+            duration: 4,
+            repeat: Infinity,
+            ease: 'linear',
+          }}
         />
       </div>
 
-      {/* Feature indicators */}
-      <div className="flex gap-6 mt-8">
-        <FeatureIcon icon={Eye} label="Pattern Analysis" delay={0} />
-        <FeatureIcon icon={Lock} label="Obfuscation Check" delay={0.2} />
-        <FeatureIcon icon={Zap} label="Risk Scoring" delay={0.4} />
+      <div style={styles.scanningLabel}>
+        <Scan style={{ width: '14px', height: '14px' }} />
+        <span>Static Analysis in Progress</span>
       </div>
-    </motion.div>
-  );
-}
-
-function FeatureIcon({ icon: Icon, label, delay }: { icon: typeof Eye; label: string; delay: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.5 }}
-      className="flex flex-col items-center gap-2"
-    >
-      <motion.div
-        animate={{ 
-          scale: [1, 1.2, 1],
-          opacity: [0.5, 1, 0.5]
-        }}
-        transition={{ duration: 2, repeat: Infinity, delay }}
-        className="w-10 h-10 rounded-xl bg-luma-card flex items-center justify-center"
-      >
-        <Icon className="w-5 h-5 text-luma-primary" />
-      </motion.div>
-      <span className="text-xs text-luma-muted">{label}</span>
-    </motion.div>
+    </div>
   );
 }
