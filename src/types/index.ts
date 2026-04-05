@@ -1,7 +1,7 @@
 export interface ScanReport {
   id: string;
   riskScore: number;
-  rating: 'SAFE' | 'CAUTION' | 'FLAGGED';
+  rating: 'SAFE' | 'LOW RISK' | 'MODERATE RISK' | 'HIGH RISK' | 'CRITICAL';
   summary: string;
   detections: DetectionCategory[];
   extractedUrls: ExtractedUrl[];
@@ -55,6 +55,8 @@ export interface AnalysisContext {
   hasObfuscation: boolean;
   obfuscationLevel: number;
   riskFactors: RiskFactor[];
+  bytecodeDetected?: boolean;
+  bytecodeType?: string;
 }
 
 export interface RiskFactor {
