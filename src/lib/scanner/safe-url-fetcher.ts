@@ -61,7 +61,7 @@ export class SafeUrlFetcher {
       if (urlRisk.isSuspicious) {
         detections.push({
           title: 'Suspicious URL Structure',
-          description: urlRisk.reason,
+          description: urlRisk.reason || 'Suspicious URL pattern detected',
           line: urlInfo.line,
           severity: 'high',
         });

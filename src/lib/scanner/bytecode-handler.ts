@@ -154,7 +154,7 @@ export class BytecodeHandler {
     const standardStrings = code.match(/[\x20-\x7e]{10,}/g) || [];
     strings.push(...standardStrings);
 
-    return [...new Set(strings)]; // Deduplicate
+    return Array.from(new Set(strings)); // Deduplicate
   }
 
   /**

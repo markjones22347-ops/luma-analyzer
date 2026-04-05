@@ -87,16 +87,20 @@ export class RateLimiter {
    * Clean up old entries to prevent memory leak
    */
   private cleanup(now: number): void {
-    for (const [ip, record] of this.requests.entries()) {
+    const toDelete: string[] = [];
+    
+    this.requests.forEach((record, ip) => {
       // Remove if window expired and not blocked
       if (!record.blocked && now - record.firstRequest > RateLimiter.WINDOW_MS) {
-        this.requests.delete(ip);
+        toDelete.push(ip);
       }
       // Remove if block expired
       if (record.blocked && record.blockedUntil && now >= record.blockedUntil) {
-        this.requests.delete(ip);
+        toDelete.push(ip);
       }
-    }
+    });
+    
+    toDelete.forEach(ip => this.requests.delete(ip));
   }
 
   /**
