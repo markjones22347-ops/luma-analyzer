@@ -233,7 +233,7 @@ export class LuaAnalyzer {
     return {
       id,
       riskScore: 100,
-      rating: 'FLAGGED',
+      rating: 'CRITICAL',
       summary: 'This script matches a known malicious hash in the threat database. It has been reported as malware by the community. DO NOT EXECUTE.',
       detections: [{
         name: 'Threat Database Match',
