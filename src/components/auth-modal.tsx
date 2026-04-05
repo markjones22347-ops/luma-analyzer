@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Lock, LogIn, UserPlus, Mail, CheckCircle, RefreshCw } from 'lucide-react';
+import { X, User, Lock, LogIn, UserPlus, Mail, CheckCircle, RefreshCw, ArrowRight } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -20,13 +20,14 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
+    padding: '20px',
   },
   modal: {
     backgroundColor: '#0a0a0a',
     borderRadius: '12px',
     padding: '32px',
     width: '100%',
-    maxWidth: '400px',
+    maxWidth: '420px',
     border: '1px solid rgba(255, 255, 255, 0.1)',
   },
   header: {
@@ -36,7 +37,7 @@ const styles = {
     marginBottom: '24px',
   },
   title: {
-    fontSize: '20px',
+    fontSize: '22px',
     fontWeight: 600,
     color: '#ffffff',
   },
@@ -55,8 +56,8 @@ const styles = {
   },
   tab: (isActive: boolean) => ({
     flex: 1,
-    padding: '10px',
-    borderRadius: '6px',
+    padding: '12px',
+    borderRadius: '8px',
     fontSize: '14px',
     fontWeight: 500,
     border: 'none',
@@ -67,6 +68,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
+    transition: 'all 0.2s ease',
   }),
   form: {
     display: 'flex',
@@ -81,75 +83,129 @@ const styles = {
   label: {
     fontSize: '13px',
     color: 'rgba(255, 255, 255, 0.6)',
+    marginLeft: '4px',
+  },
+  inputWrapper: {
+    position: 'relative' as const,
+    display: 'flex',
+    alignItems: 'center',
+  },
+  inputIcon: {
+    position: 'absolute' as const,
+    left: '16px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    width: '18px',
+    height: '18px',
+    color: 'rgba(255, 255, 255, 0.4)',
+    pointerEvents: 'none' as const,
   },
   input: {
-    padding: '12px 16px',
-    borderRadius: '6px',
+    width: '100%',
+    padding: '14px 16px 14px 48px',
+    borderRadius: '10px',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     border: '1px solid rgba(255, 255, 255, 0.1)',
     color: '#ffffff',
-    fontSize: '14px',
+    fontSize: '15px',
     outline: 'none',
+    boxSizing: 'border-box' as const,
   },
   submitButton: {
-    padding: '12px',
-    borderRadius: '6px',
+    width: '100%',
+    padding: '14px',
+    borderRadius: '10px',
     backgroundColor: 'rgba(59, 130, 246, 0.2)',
     border: '1px solid rgba(59, 130, 246, 0.3)',
     color: '#3b82f6',
-    fontSize: '14px',
+    fontSize: '15px',
     fontWeight: 600,
     cursor: 'pointer',
     marginTop: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    transition: 'all 0.2s ease',
   },
   error: {
-    padding: '12px',
-    borderRadius: '6px',
+    padding: '12px 16px',
+    borderRadius: '8px',
     backgroundColor: 'rgba(239, 68, 68, 0.1)',
     border: '1px solid rgba(239, 68, 68, 0.2)',
     color: '#ef4444',
     fontSize: '13px',
   },
-  success: {
-    padding: '12px',
-    borderRadius: '6px',
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    border: '1px solid rgba(34, 197, 94, 0.2)',
-    color: '#22c55e',
-    fontSize: '13px',
-  },
-  verificationBox: {
+  successBox: {
     textAlign: 'center' as const,
-    padding: '20px',
+    padding: '32px 20px',
   },
-  verificationTitle: {
-    fontSize: '18px',
+  successIcon: {
+    width: '64px',
+    height: '64px',
+    color: '#22c55e',
+    marginBottom: '20px',
+  },
+  successTitle: {
+    fontSize: '22px',
     fontWeight: 600,
     color: '#22c55e',
     marginBottom: '12px',
   },
-  verificationText: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: '14px',
-    lineHeight: 1.5,
-    marginBottom: '20px',
+  successText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: '15px',
+    lineHeight: 1.6,
+    marginBottom: '24px',
   },
   emailHighlight: {
     color: '#3b82f6',
     fontWeight: 600,
   },
-  resendButton: {
+  codeInput: {
+    width: '100%',
+    padding: '16px',
+    borderRadius: '10px',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    border: '1px solid rgba(59, 130, 246, 0.3)',
+    color: '#3b82f6',
+    fontSize: '28px',
+    fontWeight: 700,
+    textAlign: 'center' as const,
+    letterSpacing: '12px',
+    outline: 'none',
+    marginBottom: '16px',
+    boxSizing: 'border-box' as const,
+  },
+  secondaryButton: {
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: '6px',
-    padding: '8px 16px',
-    borderRadius: '6px',
+    padding: '10px 16px',
+    borderRadius: '8px',
     backgroundColor: 'transparent',
     border: '1px solid rgba(255, 255, 255, 0.2)',
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255, 255, 255, 0.6)',
     fontSize: '13px',
     cursor: 'pointer',
     marginTop: '12px',
+    width: '100%',
+  },
+  signInPrompt: {
+    textAlign: 'center' as const,
+    marginTop: '20px',
+    paddingTop: '20px',
+    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+  },
+  signInText: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: '14px',
+  },
+  signInLink: {
+    color: '#3b82f6',
+    cursor: 'pointer',
+    fontWeight: 600,
   },
 };
 
@@ -161,10 +217,11 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
   const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
-  // Verification flow state
-  const [needsVerification, setNeedsVerification] = useState(false);
+  // Flow states
+  const [showVerification, setShowVerification] = useState(false);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
   const [pendingUsername, setPendingUsername] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
 
@@ -172,7 +229,6 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setSuccess(null);
 
     try {
       const response = await fetch('/api/auth', {
@@ -191,10 +247,10 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
       if (data.success) {
         if (activeTab === 'register') {
           // Show verification step
-          setNeedsVerification(true);
+          setShowVerification(true);
           setPendingUsername(data.user.username);
           setPendingEmail(data.user.email);
-          setSuccess(data.message);
+          setSuccessMessage(data.message);
         } else {
           // Login successful
           onAuth(data.user);
@@ -202,7 +258,7 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
         }
       } else {
         if (data.needsVerification) {
-          setNeedsVerification(true);
+          setShowVerification(true);
           setPendingUsername(data.username);
           setError('Please verify your email before logging in.');
         } else {
@@ -235,8 +291,18 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
       const data = await response.json();
 
       if (data.success) {
-        onAuth(data.user);
-        onClose();
+        // Show success then redirect to sign in
+        setRegistrationComplete(true);
+        setTimeout(() => {
+          // Reset to sign in tab
+          setActiveTab('login');
+          setShowVerification(false);
+          setRegistrationComplete(false);
+          setUsername(pendingUsername);
+          setEmail(pendingEmail);
+          setVerificationCode('');
+          setSuccessMessage(null);
+        }, 2000);
       } else {
         setError(data.error || 'Verification failed');
       }
@@ -264,7 +330,7 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
       const data = await response.json();
 
       if (data.success) {
-        setSuccess(data.message);
+        setSuccessMessage(data.message);
       } else {
         setError(data.error || 'Failed to resend code');
       }
@@ -275,13 +341,29 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
     }
   };
 
+  const switchToSignIn = () => {
+    setActiveTab('login');
+    setShowVerification(false);
+    setRegistrationComplete(false);
+    setUsername(pendingUsername);
+    setEmail('');
+    setPassword('');
+    setVerificationCode('');
+    setSuccessMessage(null);
+    setError(null);
+  };
+
   const resetForm = () => {
-    setNeedsVerification(false);
+    setShowVerification(false);
+    setRegistrationComplete(false);
     setPendingUsername('');
     setPendingEmail('');
+    setUsername('');
+    setEmail('');
+    setPassword('');
     setVerificationCode('');
     setError(null);
-    setSuccess(null);
+    setSuccessMessage(null);
   };
 
   if (!isOpen) return null;
@@ -304,72 +386,93 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
         >
           <div style={styles.header}>
             <h2 style={styles.title}>
-              {needsVerification ? 'Verify Email' : activeTab === 'login' ? 'Sign In' : 'Create Account'}
+              {showVerification ? 'Verify Email' : activeTab === 'login' ? 'Welcome Back' : 'Create Account'}
             </h2>
             <button onClick={onClose} style={styles.closeButton}>
               <X style={{ width: '20px', height: '20px' }} />
             </button>
           </div>
 
-          {needsVerification ? (
-            <div style={styles.verificationBox}>
-              <CheckCircle style={{ width: '48px', height: '48px', color: '#22c55e', marginBottom: '16px' }} />
-              <p style={styles.verificationTitle}>Check your email</p>
-              <p style={styles.verificationText}>
-                We've sent a 6-digit verification code to<br />
-                <span style={styles.emailHighlight}>{pendingEmail}</span>
-              </p>
-              
-              {error && <div style={styles.error}>{error}</div>}
-              {success && <div style={styles.success}>{success}</div>}
+          {showVerification ? (
+            registrationComplete ? (
+              // Registration complete - show success before redirecting
+              <div style={styles.successBox}>
+                <CheckCircle style={styles.successIcon} />
+                <h3 style={styles.successTitle}>Email Verified!</h3>
+                <p style={styles.successText}>
+                  Your account has been created successfully. Redirecting to sign in...
+                </p>
+              </div>
+            ) : (
+              // Verification form
+              <>
+                <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                  <Mail style={{ width: '48px', height: '48px', color: '#3b82f6', marginBottom: '12px' }} />
+                  <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '15px', lineHeight: 1.5 }}>
+                    Enter the 6-digit code we sent to<br />
+                    <span style={styles.emailHighlight}>{pendingEmail}</span>
+                  </p>
+                </div>
 
-              <form onSubmit={handleVerify} style={styles.form}>
-                <div style={styles.inputGroup}>
+                {error && <div style={styles.error}>{error}</div>}
+                {successMessage && (
+                  <div style={{ ...styles.error, backgroundColor: 'rgba(34, 197, 94, 0.1)', borderColor: 'rgba(34, 197, 94, 0.2)', color: '#22c55e' }}>
+                    {successMessage}
+                  </div>
+                )}
+
+                <form onSubmit={handleVerify} style={styles.form}>
                   <input
                     type="text"
                     value={verificationCode}
                     onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="Enter 6-digit code"
-                    style={{ ...styles.input, textAlign: 'center', fontSize: '24px', letterSpacing: '8px' }}
+                    placeholder="000000"
+                    style={styles.codeInput}
                     required
                     maxLength={6}
+                    autoFocus
                   />
-                </div>
 
-                <button
-                  type="submit"
-                  disabled={loading || verificationCode.length !== 6}
-                  style={{
-                    ...styles.submitButton,
-                    opacity: loading || verificationCode.length !== 6 ? 0.6 : 1,
-                    cursor: loading || verificationCode.length !== 6 ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  {loading ? 'Verifying...' : 'Verify Email'}
+                  <button
+                    type="submit"
+                    disabled={loading || verificationCode.length !== 6}
+                    style={{
+                      ...styles.submitButton,
+                      opacity: loading || verificationCode.length !== 6 ? 0.6 : 1,
+                      cursor: loading || verificationCode.length !== 6 ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {loading ? 'Verifying...' : (
+                      <>
+                        Verify Email
+                        <ArrowRight style={{ width: '18px', height: '18px' }} />
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                <button onClick={handleResendCode} disabled={loading} style={styles.secondaryButton}>
+                  <RefreshCw style={{ width: '14px', height: '14px' }} />
+                  Resend Code
                 </button>
-              </form>
 
-              <button onClick={handleResendCode} disabled={loading} style={styles.resendButton}>
-                <RefreshCw style={{ width: '14px', height: '14px' }} />
-                Resend Code
-              </button>
-
-              <button onClick={resetForm} style={{ ...styles.resendButton, marginTop: '8px' }}>
-                Back to {activeTab === 'login' ? 'Sign In' : 'Sign Up'}
-              </button>
-            </div>
+                <button onClick={switchToSignIn} style={{ ...styles.secondaryButton, marginTop: '8px' }}>
+                  Already verified? Sign In
+                </button>
+              </>
+            )
           ) : (
             <>
               <div style={styles.tabs}>
                 <button
-                  onClick={() => setActiveTab('login')}
+                  onClick={() => { setActiveTab('login'); resetForm(); }}
                   style={styles.tab(activeTab === 'login')}
                 >
                   <LogIn style={{ width: '16px', height: '16px' }} />
                   Sign In
                 </button>
                 <button
-                  onClick={() => setActiveTab('register')}
+                  onClick={() => { setActiveTab('register'); resetForm(); }}
                   style={styles.tab(activeTab === 'register')}
                 >
                   <UserPlus style={{ width: '16px', height: '16px' }} />
@@ -383,14 +486,14 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
                 {activeTab === 'register' && (
                   <div style={styles.inputGroup}>
                     <label style={styles.label}>Email</label>
-                    <div style={{ position: 'relative' }}>
-                      <Mail style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'rgba(255,255,255,0.4)' }} />
+                    <div style={styles.inputWrapper}>
+                      <Mail style={styles.inputIcon} />
                       <input
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="you@example.com"
-                        style={{ ...styles.input, paddingLeft: '40px' }}
+                        style={styles.input}
                         required={activeTab === 'register'}
                       />
                     </div>
@@ -399,14 +502,14 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
 
                 <div style={styles.inputGroup}>
                   <label style={styles.label}>Username</label>
-                  <div style={{ position: 'relative' }}>
-                    <User style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'rgba(255,255,255,0.4)' }} />
+                  <div style={styles.inputWrapper}>
+                    <User style={styles.inputIcon} />
                     <input
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       placeholder="Enter username"
-                      style={{ ...styles.input, paddingLeft: '40px' }}
+                      style={styles.input}
                       required
                       minLength={3}
                       maxLength={20}
@@ -416,14 +519,14 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
 
                 <div style={styles.inputGroup}>
                   <label style={styles.label}>Password</label>
-                  <div style={{ position: 'relative' }}>
-                    <Lock style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', color: 'rgba(255,255,255,0.4)' }} />
+                  <div style={styles.inputWrapper}>
+                    <Lock style={styles.inputIcon} />
                     <input
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter password"
-                      style={{ ...styles.input, paddingLeft: '40px' }}
+                      style={styles.input}
                       required
                       minLength={6}
                     />
@@ -439,9 +542,34 @@ export function AuthModal({ isOpen, onClose, onAuth }: AuthModalProps) {
                     cursor: loading ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {loading ? 'Please wait...' : activeTab === 'login' ? 'Sign In' : 'Create Account'}
+                  {loading ? 'Please wait...' : (
+                    <>
+                      {activeTab === 'login' ? 'Sign In' : 'Create Account'}
+                      <ArrowRight style={{ width: '18px', height: '18px' }} />
+                    </>
+                  )}
                 </button>
               </form>
+
+              {activeTab === 'login' ? (
+                <div style={styles.signInPrompt}>
+                  <span style={styles.signInText}>
+                    Don't have an account?{' '}
+                    <span onClick={() => { setActiveTab('register'); resetForm(); }} style={styles.signInLink}>
+                      Sign up
+                    </span>
+                  </span>
+                </div>
+              ) : (
+                <div style={styles.signInPrompt}>
+                  <span style={styles.signInText}>
+                    Already have an account?{' '}
+                    <span onClick={() => { setActiveTab('login'); resetForm(); }} style={styles.signInLink}>
+                      Sign in
+                    </span>
+                  </span>
+                </div>
+              )}
             </>
           )}
         </motion.div>
