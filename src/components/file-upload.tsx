@@ -15,80 +15,74 @@ const styles = {
   },
   tabContainer: {
     display: 'flex',
-    gap: '8px',
-    marginBottom: '24px',
-    padding: '6px',
+    gap: '4px',
+    marginBottom: '20px',
+    padding: '4px',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: '20px',
-    border: '1px solid rgba(255, 255, 255, 0.06)',
+    borderRadius: '6px',
   },
   tabButton: (isActive: boolean) => ({
     flex: 1,
-    padding: '14px 28px',
-    borderRadius: '14px',
-    fontWeight: 600,
-    fontSize: '15px',
+    padding: '10px 20px',
+    borderRadius: '4px',
+    fontWeight: 500,
+    fontSize: '14px',
     border: 'none',
     cursor: 'pointer',
-    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-    backgroundColor: isActive ? '#3b82f6' : 'transparent',
+    transition: 'all 0.2s ease',
+    backgroundColor: isActive ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
     color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
-    boxShadow: isActive ? '0 8px 25px -5px rgba(59, 130, 246, 0.4)' : 'none',
   }),
-  glassCard: {
+  fileCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    backdropFilter: 'blur(20px)',
-    borderRadius: '28px',
-    padding: '32px',
+    borderRadius: '8px',
+    padding: '20px',
     border: '1px solid rgba(255, 255, 255, 0.06)',
   },
   fileInfo: {
     display: 'flex',
     alignItems: 'center',
-    gap: '20px',
+    gap: '16px',
   },
   fileIconBox: {
-    width: '72px',
-    height: '72px',
-    borderRadius: '20px',
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    width: '48px',
+    height: '48px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(74, 222, 128, 0.1)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    border: '1px solid rgba(34, 197, 94, 0.2)',
   },
   fileName: {
-    fontSize: '18px',
-    fontWeight: 600,
+    fontSize: '15px',
+    fontWeight: 500,
     color: '#ffffff',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
   fileSize: {
-    fontSize: '14px',
-    color: 'rgba(255, 255, 255, 0.5)',
-    marginTop: '4px',
+    fontSize: '13px',
+    color: 'rgba(255, 255, 255, 0.4)',
+    marginTop: '2px',
   },
   clearButton: {
-    padding: '14px',
-    borderRadius: '14px',
+    padding: '8px',
+    borderRadius: '4px',
     backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    color: '#ef4444',
-    border: '1px solid rgba(239, 68, 68, 0.2)',
+    color: '#f87171',
+    border: 'none',
     cursor: 'pointer',
-    transition: 'all 0.2s',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
   dropZone: (isDragging: boolean) => ({
     position: 'relative' as const,
-    borderRadius: '28px',
-    border: `2px dashed ${isDragging ? '#3b82f6' : 'rgba(255, 255, 255, 0.15)'}`,
-    backgroundColor: isDragging ? 'rgba(59, 130, 246, 0.05)' : 'transparent',
-    transition: 'all 0.3s ease',
-    overflow: 'hidden',
+    borderRadius: '8px',
+    border: `1px dashed ${isDragging ? 'rgba(255,255,255,0.3)' : 'rgba(255, 255, 255, 0.15)'}`,
+    backgroundColor: isDragging ? 'rgba(255,255,255,0.03)' : 'transparent',
+    transition: 'all 0.2s ease',
   }),
   fileInput: {
     position: 'absolute' as const,
@@ -100,76 +94,72 @@ const styles = {
     zIndex: 10,
   },
   dropContent: {
-    padding: '60px 48px',
+    padding: '40px',
     textAlign: 'center' as const,
   },
   uploadIconBox: {
-    width: '100px',
-    height: '100px',
-    margin: '0 auto 28px',
-    borderRadius: '28px',
-    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2))',
+    width: '64px',
+    height: '64px',
+    margin: '0 auto 16px',
+    borderRadius: '8px',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    border: '1px solid rgba(59, 130, 246, 0.2)',
   },
   dropTitle: {
-    fontSize: '22px',
-    fontWeight: 600,
+    fontSize: '16px',
+    fontWeight: 500,
     color: '#ffffff',
-    marginBottom: '10px',
+    marginBottom: '6px',
   },
   dropSubtitle: {
-    fontSize: '15px',
-    color: 'rgba(255, 255, 255, 0.5)',
-    marginBottom: '20px',
+    fontSize: '13px',
+    color: 'rgba(255, 255, 255, 0.4)',
+    marginBottom: '12px',
   },
   maxSizeBadge: {
     display: 'inline-block',
-    padding: '10px 20px',
-    borderRadius: '9999px',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    fontSize: '14px',
-    color: 'rgba(255, 255, 255, 0.6)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
+    padding: '6px 12px',
+    borderRadius: '4px',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    fontSize: '12px',
+    color: 'rgba(255, 255, 255, 0.4)',
   },
   textarea: {
     width: '100%',
-    height: '320px',
-    padding: '28px',
-    borderRadius: '24px',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
+    height: '240px',
+    padding: '16px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    border: '1px solid rgba(255, 255, 255, 0.06)',
     color: '#ffffff',
     fontFamily: 'monospace',
-    fontSize: '14px',
+    fontSize: '13px',
     resize: 'none' as const,
     outline: 'none',
-    lineHeight: 1.6,
+    lineHeight: 1.5,
   },
   textareaWrapper: {
     position: 'relative' as const,
   },
   charCount: {
     position: 'absolute' as const,
-    bottom: '20px',
-    right: '20px',
-    fontSize: '13px',
-    color: 'rgba(255, 255, 255, 0.4)',
+    bottom: '12px',
+    right: '12px',
+    fontSize: '12px',
+    color: 'rgba(255, 255, 255, 0.3)',
   },
   analyzeButton: {
     width: '100%',
-    padding: '18px 32px',
-    borderRadius: '18px',
-    background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+    padding: '12px 20px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     color: '#ffffff',
-    fontWeight: 700,
-    fontSize: '16px',
+    fontWeight: 500,
+    fontSize: '14px',
     border: 'none',
     cursor: 'pointer',
-    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-    boxShadow: '0 10px 30px -5px rgba(59, 130, 246, 0.4)',
     marginTop: '8px',
   },
 };
@@ -224,41 +214,17 @@ export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
 
   return (
     <div style={styles.container}>
-      {/* Custom Rounded Tab Buttons */}
+      {/* Tabs */}
       <div style={styles.tabContainer}>
         <button
           onClick={() => setActiveTab('upload')}
           style={styles.tabButton(activeTab === 'upload')}
-          onMouseEnter={(e) => {
-            if (activeTab !== 'upload') {
-              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)';
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (activeTab !== 'upload') {
-              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.5)';
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }
-          }}
         >
           Upload File
         </button>
         <button
           onClick={() => setActiveTab('paste')}
           style={styles.tabButton(activeTab === 'paste')}
-          onMouseEnter={(e) => {
-            if (activeTab !== 'paste') {
-              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.8)';
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (activeTab !== 'paste') {
-              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.5)';
-              e.currentTarget.style.backgroundColor = 'transparent';
-            }
-          }}
         >
           Paste Code
         </button>
@@ -268,45 +234,29 @@ export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
         {activeTab === 'upload' ? (
           <motion.div
             key="upload"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
           >
             {selectedFile ? (
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                style={styles.glassCard}
-              >
+              <div style={styles.fileCard}>
                 <div style={styles.fileInfo}>
                   <div style={styles.fileIconBox}>
-                    <FileCode style={{ width: '36px', height: '36px', color: '#22c55e' }} />
+                    <FileCode style={{ width: '24px', height: '24px', color: '#4ade80' }} />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <h3 style={styles.fileName}>
-                      {selectedFile.name}
-                    </h3>
-                    <p style={styles.fileSize}>
-                      {(selectedFile.size / 1024).toFixed(1)} KB • Ready to analyze
-                    </p>
+                    <h3 style={styles.fileName}>{selectedFile.name}</h3>
+                    <p style={styles.fileSize}>{(selectedFile.size / 1024).toFixed(1)} KB</p>
                   </div>
                   <button
                     onClick={clearFile}
                     style={styles.clearButton}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
-                      e.currentTarget.style.transform = 'scale(1.05)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                      e.currentTarget.style.transform = 'scale(1)';
-                    }}
                   >
-                    <X style={{ width: '22px', height: '22px' }} />
+                    <X style={{ width: '18px', height: '18px' }} />
                   </button>
                 </div>
-              </motion.div>
+              </div>
             ) : (
               <div
                 onDragOver={handleDragOver}
@@ -321,22 +271,12 @@ export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
                   style={styles.fileInput}
                 />
                 <div style={styles.dropContent}>
-                  <motion.div
-                    animate={isDragging ? { scale: 1.1, rotate: 5 } : { scale: 1, rotate: 0 }}
-                    transition={{ type: 'spring', stiffness: 300 }}
-                    style={styles.uploadIconBox}
-                  >
-                    <Upload style={{ width: '44px', height: '44px', color: '#3b82f6' }} />
-                  </motion.div>
-                  <h3 style={styles.dropTitle}>
-                    Drop your Lua file here
-                  </h3>
-                  <p style={styles.dropSubtitle}>
-                    or click anywhere to browse files
-                  </p>
-                  <span style={styles.maxSizeBadge}>
-                    Supports .lua and .txt up to 5MB
-                  </span>
+                  <div style={styles.uploadIconBox}>
+                    <Upload style={{ width: '28px', height: '28px', color: 'rgba(255,255,255,0.5)' }} />
+                  </div>
+                  <h3 style={styles.dropTitle}>Drop your Lua file here</h3>
+                  <p style={styles.dropSubtitle}>or click to browse</p>
+                  <span style={styles.maxSizeBadge}>.lua or .txt up to 5MB</span>
                 </div>
               </div>
             )}
@@ -344,49 +284,31 @@ export function FileUpload({ onFileSelect, onCodePaste }: FileUploadProps) {
         ) : (
           <motion.div
             key="paste"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-            style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
           >
             <div style={styles.textareaWrapper}>
               <textarea
                 value={codeInput}
                 onChange={(e) => setCodeInput(e.target.value)}
-                placeholder="Paste your Lua code here for instant analysis..."
+                placeholder="Paste your Lua code here..."
                 style={styles.textarea}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
                 spellCheck={false}
               />
               <div style={styles.charCount}>
-                {codeInput.length.toLocaleString()} chars
+                {codeInput.length} chars
               </div>
             </div>
             {codeInput.trim() && (
-              <motion.button
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+              <button
                 onClick={handleCodeSubmit}
                 style={styles.analyzeButton}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 15px 35px -5px rgba(59, 130, 246, 0.5)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 10px 30px -5px rgba(59, 130, 246, 0.4)';
-                }}
               >
-                Start Analysis
-              </motion.button>
+                Analyze Code
+              </button>
             )}
           </motion.div>
         )}

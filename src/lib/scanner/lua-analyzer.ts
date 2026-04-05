@@ -393,76 +393,85 @@ ${bytecodeCheck.riskFactors.map(rf => `- ${rf.type}: weight ${rf.weight}`).join(
     bytecodeCheck: { obfuscationLevel: string; bytecodeType?: string },
     webhookAnalysis: { obfuscatedWebhooks: Array<{ method: string }> }
   ): string {
-    const lines: string[] = [];
+    const sections: string[] = [];
     
-    lines.push('## Risk Analysis Breakdown');
-    lines.push('');
+    // Main Title
+    sections.push(`<h2 style="font-size:18px;font-weight:700;color:#ffffff;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:8px;">Risk Analysis Breakdown</h2>`);
     
-    // Security warning
-    lines.push('### Security Analysis Methodology');
-    lines.push('- Analysis Type: **PURELY STATIC** (no code execution)');
-    lines.push('- Bytecode Detection: **ENABLED**');
-    lines.push('- Known Threat Database: **CHECKED**');
-    lines.push('- Obfuscated Webhook Detection: **ENABLED**');
-    lines.push('');
+    // Security Methodology Section
+    sections.push(`<h3 style="font-size:15px;font-weight:600;color:#3b82f6;margin:16px 0 12px 0;">Security Analysis Methodology</h3>`);
+    sections.push(`<ul style="margin:0 0 16px 0;padding-left:20px;list-style-type:disc;color:rgba(255,255,255,0.7);line-height:1.6;">`);
+    sections.push(`<li style="margin-bottom:6px;"><strong style="color:#ffffff;">Analysis Type:</strong> PURELY STATIC (no code execution)</li>`);
+    sections.push(`<li style="margin-bottom:6px;"><strong style="color:#ffffff;">Bytecode Detection:</strong> ENABLED</li>`);
+    sections.push(`<li style="margin-bottom:6px;"><strong style="color:#ffffff;">Known Threat Database:</strong> CHECKED</li>`);
+    sections.push(`<li style="margin-bottom:6px;"><strong style="color:#ffffff;">Obfuscated Webhook Detection:</strong> ENABLED</li>`);
+    sections.push(`</ul>`);
     
-    // Risk factors
+    // Risk factors section
     if (context.riskFactors.length > 0) {
-      lines.push('### Key Risk Factors Identified:');
-      for (const factor of context.riskFactors) {
-        lines.push(`- **${factor.type}** (weight: ${factor.weight})`);
+      sections.push(`<h3 style="font-size:15px;font-weight:600;color:#ef4444;margin:16px 0 12px 0;">Key Risk Factors Identified</h3>`);
+      sections.push(`<ul style="margin:0 0 16px 0;padding-left:20px;list-style-type:disc;color:rgba(255,255,255,0.7);line-height:1.6;">`);
+      for (const factor of context.riskFactors.slice(0, 8)) {
+        sections.push(`<li style="margin-bottom:8px;"><strong style="color:#ffffff;">${factor.type}</strong> <span style="color:rgba(255,255,255,0.5);">(weight: ${factor.weight})</span></li>`);
         if (factor.evidence.length > 0) {
-          lines.push(`  - Evidence: ${factor.evidence.slice(0, 2).join(', ')}`);
+          sections.push(`<div style="margin-left:16px;margin-top:4px;font-size:13px;color:rgba(255,255,255,0.5);">Evidence: ${factor.evidence.slice(0, 2).join(', ')}</div>`);
         }
       }
-      lines.push('');
+      sections.push(`</ul>`);
     }
 
     // Obfuscated webhook analysis
     if (webhookAnalysis.obfuscatedWebhooks.length > 0) {
-      lines.push('### Obfuscated Webhook Analysis:');
+      sections.push(`<h3 style="font-size:15px;font-weight:600;color:#f59e0b;margin:16px 0 12px 0;">Obfuscated Webhook Analysis</h3>`);
+      sections.push(`<ul style="margin:0 0 16px 0;padding-left:20px;list-style-type:disc;color:rgba(255,255,255,0.7);line-height:1.6;">`);
       const methods = webhookAnalysis.obfuscatedWebhooks.reduce((acc, w) => {
         acc[w.method] = (acc[w.method] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
       
       for (const [method, count] of Object.entries(methods)) {
-        lines.push(`- **${method}**: ${count} instance(s)`);
+        sections.push(`<li style="margin-bottom:6px;"><strong style="color:#ffffff;">${method}:</strong> ${count} instance(s)</li>`);
       }
-      lines.push('- All webhooks are hidden via encoding/fragmentation = HIGH RISK');
-      lines.push('');
+      sections.push(`</ul>`);
+      sections.push(`<div style="padding:12px 16px;background-color:rgba(239,68,68,0.1);border-radius:8px;border-left:3px solid #ef4444;margin-bottom:16px;color:rgba(255,255,255,0.8);font-size:14px;">All webhooks are hidden via encoding/fragmentation = HIGH RISK</div>`);
     }
 
     // Behavior analysis
-    lines.push('### Behavioral Analysis:');
+    sections.push(`<h3 style="font-size:15px;font-weight:600;color:#8b5cf6;margin:16px 0 12px 0;">Behavioral Analysis</h3>`);
+    sections.push(`<ul style="margin:0 0 16px 0;padding-left:20px;list-style-type:disc;color:rgba(255,255,255,0.7);line-height:1.6;">`);
     
     if (context.hasRemoteExecution && context.hasNetworkActivity) {
-      lines.push('- **CRITICAL**: Remote code execution chain detected. Script fetches external resources and immediately executes them.');
-      lines.push('- This pattern is commonly used to deliver malware, steal data, or compromise accounts.');
+      sections.push(`<li style="margin-bottom:8px;"><strong style="color:#ef4444;">CRITICAL:</strong> Remote code execution chain detected. Script fetches external resources and immediately executes them.</li>`);
+      sections.push(`<li style="margin-bottom:8px;color:rgba(255,255,255,0.6);">This pattern is commonly used to deliver malware, steal data, or compromise accounts.</li>`);
     }
     
     if (context.hasObfuscation) {
-      lines.push(`- **HIGH**: Code obfuscation level at ${context.obfuscationLevel}%. Obfuscation is typically used to evade detection.`);
+      sections.push(`<li style="margin-bottom:8px;"><strong style="color:#f59e0b;">HIGH:</strong> Code obfuscation level at ${context.obfuscationLevel}%. Obfuscation is typically used to evade detection.</li>`);
     }
 
     if (!context.hasRemoteExecution && !context.hasNetworkActivity && !context.hasObfuscation) {
-      lines.push('- No dangerous patterns detected in the analyzed code.');
+      sections.push(`<li style="margin-bottom:8px;color:#22c55e;">No dangerous patterns detected in the analyzed code.</li>`);
     }
-    
-    lines.push('');
+    sections.push(`</ul>`);
     
     // Category summary
-    lines.push('### Detection Categories:');
+    sections.push(`<h3 style="font-size:15px;font-weight:600;color:#3b82f6;margin:16px 0 12px 0;">Detection Categories</h3>`);
+    sections.push(`<ul style="margin:0 0 16px 0;padding-left:20px;list-style-type:disc;color:rgba(255,255,255,0.7);line-height:1.6;">`);
     for (const cat of detections.slice(0, 5)) {
       const critical = cat.detections.filter(d => d.severity === 'critical').length;
       const high = cat.detections.filter(d => d.severity === 'high').length;
-      lines.push(`- ${cat.name}: ${cat.detections.length} finding(s)` + 
-        (critical > 0 ? ` (${critical} critical)` : high > 0 ? ` (${high} high)` : ''));
+      const extraInfo = critical > 0 ? ` <span style="color:#ef4444;font-weight:600;">(${critical} critical)</span>` : high > 0 ? ` <span style="color:#f59e0b;font-weight:600;">(${high} high)</span>` : '';
+      sections.push(`<li style="margin-bottom:6px;">${cat.name}: ${cat.detections.length} finding(s)${extraInfo}</li>`);
     }
+    sections.push(`</ul>`);
     
-    lines.push('');
-    lines.push(`### Final Assessment: ${score >= 70 ? 'FLAGGED - Do not use this script' : score >= 40 ? 'CAUTION - Review carefully before use' : 'SAFE - No significant risks detected'}`);
+    // Final Assessment
+    const finalColor = score >= 70 ? '#ef4444' : score >= 40 ? '#f59e0b' : '#22c55e';
+    const finalText = score >= 70 ? 'FLAGGED - Do not use this script' : score >= 40 ? 'CAUTION - Review carefully before use' : 'SAFE - No significant risks detected';
+    sections.push(`<div style="margin-top:24px;padding:16px 20px;background-color:rgba(255,255,255,0.03);border-radius:12px;border:1px solid ${finalColor};">`);
+    sections.push(`<h3 style="font-size:16px;font-weight:700;color:${finalColor};margin:0;">Final Assessment: ${finalText}</h3>`);
+    sections.push(`</div>`);
     
-    return lines.join('\n');
+    return `<div style="font-size:14px;line-height:1.6;">${sections.join('')}</div>`;
   }
 }
